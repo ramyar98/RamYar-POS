@@ -19,6 +19,9 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
+  # Minimum Dart the code was developed against (local machine: Dart 3.12.1).
+  # The CI Flutter must therefore ship Dart >= 3.12.1 - Flutter 3.47.7 does
+  # (Dart 3.13.5), Flutter 3.38.5 does NOT (Dart 3.10.4) and fails to resolve.
   sdk: ^3.12.1
 
 # Dependencies specify other packages that your package needs in order to work.

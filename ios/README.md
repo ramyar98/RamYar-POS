@@ -13,10 +13,11 @@
 | ناوی پیشاندراو (home screen) | `RAMYAR POS` |
 | Workspace | `ios/Runner.xcworkspace` |
 | Scheme | `Runner` |
-| کەمترین وەشان (deployment target) | iOS 13.0 |
+| کەمترین وەشان (deployment target) | **iOS 15.0** (خواستی Flutter 3.47) |
 | ئامێرەکان | iPhone + iPad، تەنها **landscape** |
 | وەشانی ئەپ | لە `pubspec.yaml` ـەوە (`version: 1.0.0+1`) |
 | بەڕێوەبردنی پلاگینەکان | **Swift Package Manager** (Flutter 3.35+) — Podfile نییە |
+| Flutter ـی سی‌ئای | `3.47.7` (Dart 3.13.5) — Flutter 3.38.5 تەنها Dart 3.10.4 ـی هەیە و `pubspec.yaml` (`^3.12.1`) ڕەتی دەکاتەوە |
 
 > ⚠️ **Podfile زیاد مەکە.** ئەم پرۆژەکە پلاگینەکانی بە Swift Package Manager
 > (SPM) بەڕێوەدەبات، کە ڕێکخستنی بنەڕەتی Flutter ـی نوێیە. زیادکردنی `Podfile`
@@ -65,6 +66,13 @@
 * لە ڕێگەی `codemagic.yaml` یان `.github/workflows/ios_build.yml`،
   `flutter build ios --release --no-codesign` ئەنجام دەدرێت و
   `Runner.app` دەکرێتە `Payload/` و دەکرێتە `RamyarPOS-unsigned.ipa`.
+* **وەشانی Flutter لە سی‌ئای:** `3.47.7`. هۆکار: `pubspec.yaml` داوای
+  `sdk: ^3.12.1` دەکات، بەڵام Flutter 3.38.5 (وەشانی ڕەسمی) تەنها
+  Dart 3.10.4 ـی پێیە و `flutter pub get` دەشکێت. Flutter 3.47.7 Dart
+  3.13.5 ـی پێیە، هەروەها پشتگیری Xcode 26/27 دەکات. ئەمەش وایکردووە
+  `IPHONEOS_DEPLOYMENT_TARGET = 15.0` بێت (کەمترینی Flutter 3.47).
+  هەردوو فایلی سی‌ئای پێش `pub get` پشکنینێکی خێرا دەکەن و ئەگەر Dart
+  کەمتر بێت بە پەیامێکی ڕوون build دەوەستێنن.
 * دەتوانرێت بە **Sideloadly** یان **AltStore** لەگەڵ Apple ID ـی خۆڕایی
   دابنرێت (هەر ٧ ڕۆژ دووبارە ئیمزاکردن پێویستە).
 * بۆ `.ipa` ـی ئیمزاکراو (`ios-release`) دەبێت هەژماری

@@ -15,10 +15,11 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // Store identity of the app. Keep it in step with the iOS bundle id
+        // (com.kalakchi.ramyar.pos) and with linux/CMakeLists.txt on Linux.
         applicationId = "com.kalakchi.ramyar.pos"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // Values come from the Flutter tool (flutter.minSdkVersion / targetSdk /
+        // version from pubspec.yaml) so they can never drift from the project.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -27,8 +28,12 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // Local testing signs with the debug key, so `flutter build apk
+            // --release` and `flutter run --release` work on any machine with no
+            // keystore. Before publishing to Google Play, generate an upload
+            // keystore and point this at a release signingConfig; the
+            // key.properties / *.jks files are already git-ignored
+            // (see android/.gitignore).
             signingConfig = signingConfigs.getByName("debug")
         }
     }

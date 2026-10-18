@@ -23,11 +23,12 @@ void main() {
   });
 
   test('different install folders derive different lock ports', () {
+    // Synthetic install folders mirroring the tools/instances layout. Only
+    // "three different paths" matters to the lock, so no absolute
+    // machine-specific path is used - the suite stays portable and CI-runnable.
     final ports = {
       for (final n in [1, 2, 3])
-        instanceLockPortFor(
-          'D:\\project biablu\\Biablu\\tools\\instances\\inst$n\\ramyar_pos.exe',
-        ),
+        instanceLockPortFor('C:\\Shops\\inst$n\\ramyar_pos.exe'),
     };
     expect(
       ports,

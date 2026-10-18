@@ -20,9 +20,9 @@ cd /d "%~dp0"
 set "RAMYAR_BUILD_TYPE=Release"
 
 echo [1/2] Building Windows app (Release)...
-call flutter build windows --release
+flutter build windows --release 2>&1 | tee "%~dp0build_windows_release.log"
 if errorlevel 1 (
-  echo [ERROR] Build failed.
+  echo [ERROR] Build failed. See %~dp0build_windows_release.log
   exit /b 1
 )
 

@@ -10,7 +10,10 @@ $ErrorActionPreference = "Continue"
 # be UTF-8 or every label arrives as '?'.
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
-$base = "C:\Users\ArkanComputer\AppData\Local\Temp\opencode"
+# QA scratch folder for the log files. Same default as before (%TEMP%\opencode)
+# but derived from the environment, so it works for any Windows user; override
+# with the RAMYAR_QA_BASE environment variable.
+$base = if ($env:RAMYAR_QA_BASE) { $env:RAMYAR_QA_BASE } else { Join-Path $env:TEMP "opencode" }
 if ($Path -eq "") {
   $Path = switch ($Target) {
     "win"     { "$base\win_run.log" }

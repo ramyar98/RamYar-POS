@@ -16,7 +16,7 @@ param(
   [int]$Count = 1
 )
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$base = "C:\Users\ArkanComputer\AppData\Local\Temp\opencode"
+$base = if ($env:RAMYAR_QA_BASE) { $env:RAMYAR_QA_BASE } else { Join-Path $env:TEMP "opencode" }
 $log = "$base\and_run.log"
 
 function Get-Digest {

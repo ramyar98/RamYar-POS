@@ -12,7 +12,8 @@
 # replayed on top of a database it no longer matches.
 param(
   [string]$Package = "com.kalakchi.ramyar.pos",
-  [string]$Source = "C:\Users\ArkanComputer\AppData\Local\Temp\opencode\andlive\ramyar_pos.db",
+  # QA scratch folder (%TEMP%\opencode by default, RAMYAR_QA_BASE overrides it).
+  [string]$Source = (Join-Path $(if ($env:RAMYAR_QA_BASE) { $env:RAMYAR_QA_BASE } else { Join-Path $env:TEMP "opencode" }) "andlive\ramyar_pos.db"),
   [switch]$StartApp,
   [switch]$Confirm
 )

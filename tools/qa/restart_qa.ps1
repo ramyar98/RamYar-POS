@@ -5,8 +5,12 @@ param(
   [switch]$SkipAndroid
 )
 $ErrorActionPreference = "Continue"
-$base = "C:\Users\ArkanComputer\AppData\Local\Temp\opencode"
-$project = "D:\project biablu\Biablu"
+# QA scratch folder for logs/db copies. Same default as before (%TEMP%\opencode)
+# but derived from the environment so it works for any Windows user; override
+# with the RAMYAR_QA_BASE environment variable.
+$base = if ($env:RAMYAR_QA_BASE) { $env:RAMYAR_QA_BASE } else { Join-Path $env:TEMP "opencode" }
+# Repo root: this script lives in tools/qa/, so the root is two levels up.
+$project = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 Get-Process ramyar_pos -ErrorAction SilentlyContinue | Stop-Process -Force
 Get-Process dart -ErrorAction SilentlyContinue |

@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.kalakchi.ramyar" "\0"
-            VALUE "FileDescription", "ramyar_pos" "\0"
+            VALUE "CompanyName", "com.kalakchi" "\0"
+            VALUE "FileDescription", "RAMYAR POS" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "ramyar_pos" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.kalakchi.ramyar. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.kalakchi. All rights reserved." "\0"
             VALUE "OriginalFilename", "ramyar_pos.exe" "\0"
-            VALUE "ProductName", "ramyar_pos" "\0"
+            VALUE "ProductName", "RAMYAR POS" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

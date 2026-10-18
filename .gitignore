@@ -63,6 +63,19 @@ test_run_output.txt
 /login_screenshot.png
 /phone_screen.png
 
+# Ad-hoc screenshots and OS/editor noise dropped in the repo root. Real app
+# artwork lives in assets/ (and per-platform icon folders), never here.
+/*.png
+/*.jpg
+/*.jpeg
+Thumbs.db
+desktop.ini
+.vs/
+*.bak
+*.orig
+*.rej
+*.tmp
+
 # ===========================================================================
 # CI signing material & build outputs — NEVER commit these.
 # (Codemagic / GitHub Actions hold them as encrypted secrets instead.)

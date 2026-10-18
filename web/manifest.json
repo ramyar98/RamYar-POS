@@ -6,7 +6,7 @@
     "background_color": "#111A29",
     "theme_color": "#111A29",
     "description": "RAMYAR POS - Restaurant POS & management system.",
-    "orientation": "portrait-primary",
+    "orientation": "landscape",
     "prefer_related_applications": false,
     "icons": [
         {

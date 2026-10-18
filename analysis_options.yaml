@@ -9,6 +9,21 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    - build/**
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "**/*.mocks.dart"
+  errors:
+    # Dead code, unused imports and unused variables are warnings by default, so
+    # they can sit in the tree for months. Raise them to errors: `flutter analyze`
+    # (run in CI before every build) then fails loudly and they get fixed.
+    dead_code: error
+    unused_import: error
+    unused_local_variable: error
+    unused_field: warning
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

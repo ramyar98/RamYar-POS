@@ -236,20 +236,24 @@ workflows:
     artifacts: *artifacts_ipa
 
     publishing:
-      # Uncomment once your app exists in App Store Connect and you want the
-      # build uploaded on every successful run.
+      # Nothing is published automatically yet - the signed build is fully
+      # usable as an artifact before any Apple account exists.
+      #
+      # 1) Build notifications: uncomment and put YOUR email here.
+      # email:
+      #   recipients:
+      #     - you@example.com
+      #   notify:
+      #     success: true
+      #     failure: true
+      #
+      # 2) TestFlight upload: needs an app record in App Store Connect.
       # app_store_connect:
       #   auth: integration
       #   submit_to_testflight: true
       #   # beta_groups:
       #   #   - Internal Testers
       #   # submit_to_app_store: false
-      email:
-        recipients:
-          - arkan@example.com             # <-- PUT YOUR REAL EMAIL HERE
-        notify:
-          success: true
-          failure: true
 
   # ---------------------------------------------------------------------------
   # 3) ios-release-fallback  —  signed .ipa with zero UI configuration:

@@ -32,6 +32,11 @@
 
 name: iOS Build
 
+# Least privilege: these jobs only read the repository. No write scopes, so a
+# compromised dependency cannot push to main or publish anything.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]

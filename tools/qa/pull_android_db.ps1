@@ -3,7 +3,8 @@
 # handset cannot be read and this script says so instead of copying junk.
 param(
   [string]$Package = "com.kalakchi.ramyar.pos",
-  [string]$Out = "C:\Users\ArkanComputer\AppData\Local\Temp\opencode\andlive"
+  # QA scratch folder (%TEMP%\opencode by default, RAMYAR_QA_BASE overrides it).
+  [string]$Out = (Join-Path $(if ($env:RAMYAR_QA_BASE) { $env:RAMYAR_QA_BASE } else { Join-Path $env:TEMP "opencode" }) "andlive")
 )
 $ErrorActionPreference = "Continue"
 New-Item -ItemType Directory -Force -Path $Out | Out-Null

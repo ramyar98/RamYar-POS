@@ -1,14 +1,15 @@
 {
     "java.configuration.updateBuildConfiguration": "automatic",
 
-    // Validates codemagic.yaml against Codemagic's official JSON schema while
-    // you type, so invalid keys/values (e.g. a bad triggering event) are caught
-    // before pushing. Requires the "YAML" extension (redhat.vscode-yaml).
+    // Validates the CI files while you type, so an invalid key (e.g. a bad
+    // triggering event or a misspelled job output) is caught before pushing.
+    // Requires the "YAML" extension (redhat.vscode-yaml).
     "yaml.schemas": {
-        "https://codemagic.io/codemagic-schema.json": "codemagic.yaml"
+        "https://codemagic.io/codemagic-schema.json": "codemagic.yaml",
+        "https://json.schemastore.org/github-workflow.json": ".github/workflows/*.yml"
     },
 
-    // Keeps local files in sync with .gitattributes (repo stores LF).
+    // Keeps local files in sync with .gitattributes (the repo stores LF).
     "files.eol": "\n",
     "files.insertFinalNewline": true,
     "files.trimTrailingWhitespace": true

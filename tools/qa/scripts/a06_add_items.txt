@@ -1,0 +1,8 @@
+# Build an order at table 1: three different dishes.
+taptext بەرگەری گۆشتی د.ع 5000
+settle 1
+taptext پیتزای مۆزاریلا د.ع 8000
+settle 1
+taptext بەرگەری سپێشاڵ د.ع 12000
+settle 2
+err 5

@@ -1,0 +1,85 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+# Build output (root and per-platform, e.g. android/build, ios/build)
+**/build/
+**/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ===========================================================================
+# Local caches, machine-specific build dumps and QA artifacts.
+# These are regenerated locally and would bloat the repo / slow CI clones.
+# (`android/.gradle` is already ignored by android/.gitignore)
+# ===========================================================================
+.freebuff/
+DSTX/
+tools/instances/
+logs/
+build_error.txt
+build_output.txt
+run_out.txt
+test_run_output.txt
+/login_phone.png
+/login_phone_fixed.png
+/login_screenshot.png
+/phone_screen.png
+
+# ===========================================================================
+# CI signing material & build outputs — NEVER commit these.
+# (Codemagic / GitHub Actions hold them as encrypted secrets instead.)
+# ===========================================================================
+*.ipa
+*.xcarchive
+*.dSYM.zip
+export_options.plist
+ExportOptions.plist
+*.p12
+*.p8
+*.cer
+*.mobileprovision
+*.provisionprofile
+*.keystore
+*.jks
+key.properties
+codemagic_api_key*
+AuthKey_*.p8
+

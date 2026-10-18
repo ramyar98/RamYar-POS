@@ -1,0 +1,6 @@
+# Reconnect the phone (the sync pill is also the connect/disconnect toggle) and
+# look at the whole waiter home.
+taptext پەککەوتوو
+settle 4
+screen 2
+err 5

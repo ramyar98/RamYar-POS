@@ -1,0 +1,4 @@
+key Escape
+settle 1
+tap 200 640
+settle 2

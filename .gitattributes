@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# Line-ending policy.
+# Everything is stored in the repository as LF (what macOS/Linux CI runners
+# expect). Windows scripts keep CRLF so they still double-click-run.
+# ---------------------------------------------------------------------------
+* text=auto eol=lf
+
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary / generated files — never touch, never diff.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.ttf  binary
+*.otf  binary
+*.ipa  binary
+*.xcarchive binary
+*.dylib binary
+*.dll  binary
+*.so   binary
+*.jar  binary
+*.p12  binary
+*.p8   binary
+*.mobileprovision binary
+
+# Keep the dependency lock file out of diff noise
+pubspec.lock -diff

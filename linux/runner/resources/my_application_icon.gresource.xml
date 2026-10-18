@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/com/kalakchi/ramyar/pos">
+    <file>my_application_icon.png</file>
+  </gresource>
+</gresources>

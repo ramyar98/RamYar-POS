@@ -1,0 +1,6 @@
+# Close the accidental long-press dialog, then open table 1 the way a cashier
+# does: one short tap on the card.
+key Escape
+settle 1
+taptext دانیشتوو مێز 1 03:26 PM د.ع 25000
+settle 3

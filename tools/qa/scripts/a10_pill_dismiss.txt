@@ -1,0 +1,3 @@
+# Walking away from the confirmation must leave the link alone.
+taptext ڕەتکردنەوە
+settle 2

@@ -1,0 +1,278 @@
+# =============================================================================
+#  Codemagic CI/CD — Ramyar POS  (iOS built 100% in the cloud, no Mac needed)
+# -----------------------------------------------------------------------------
+#  Project   : ramyar_pos              Bundle ID : com.kalakchi.ramyar.pos
+#  Workspace : ios/Runner.xcworkspace  Scheme    : Runner
+#  Flutter   : 3.38.5 / Dart 3.12.1 (matches your local machine)
+#  iOS min   : 13.0
+#
+#  WORKFLOWS IN THIS FILE
+#    1. ios-ipa-unsigned    -> FREE, works TODAY. Produces a real .ipa
+#                              (unsigned) that you can install on iPhone with
+#                              Sideloadly / AltStore using a FREE Apple ID.
+#                              No Apple Developer Program required.
+#    2. ios-release         -> signed .ipa for TestFlight / App Store.
+#                              Needs Apple Developer Program ($99/yr).
+#    3. ios-release-fallback-> same, but auto-creates cert+profile from API key.
+#
+#  FIRST RUN (do this now):
+#    github.com -> push this file at the repo root
+#    codemagic.io -> Add application -> pick the repo -> select the workflow
+#    "iOS Unsigned .ipa" -> Start new build -> download the .ipa artifact.
+#
+#  LATER (after you buy the Apple Developer Program):
+#    a. Team settings -> Integrations -> App Store Connect -> upload your .p8,
+#       name the key exactly:  ramyar_pos_key
+#    b. Team settings -> Code signing identities -> generate an
+#       "Apple Distribution" certificate and an "App Store" provisioning
+#       profile for com.kalakchi.ramyar.pos.
+#    c. Run the "iOS Release (signed .ipa)" workflow.
+# =============================================================================
+
+definitions:
+  # ---- Build machine -------------------------------------------------------
+  instance_mac: &instance_mac
+    instance_type: mac_mini_m2        # mac_mini_m4 is also available
+    max_build_duration: 120           # minutes (1–120)
+
+  # ---- Toolchain versions --------------------------------------------------
+  # Pinned on purpose: silent Flutter/Xcode upgrades are the #1 cause of
+  # "it built yesterday" failures.
+  tool_versions: &tool_versions
+    flutter: "3.38.5"                 # if this exact build is not listed: stable
+    xcode: latest                     # pin later, e.g. "16.3"
+    cocoapods: default
+
+  # ---- Reusable script steps ----------------------------------------------
+  script_versions: &script_versions
+    name: Print toolchain versions
+    script: |
+      flutter --version
+      dart --version
+      xcodebuild -version
+      pod --version
+
+  script_pub_get: &script_pub_get
+    name: Get Flutter packages
+    script: |
+      flutter pub get
+
+  script_pods: &script_pods
+    name: Install CocoaPods dependencies
+    script: |
+      find . -name "Podfile" -execdir pod install \;
+
+  script_analyze: &script_analyze
+    name: Static analysis (non-blocking)
+    script: |
+      flutter analyze --no-fatal-infos --no-fatal-warnings || true
+
+  script_use_profiles: &script_use_profiles
+    name: Set up code signing settings on the Xcode project
+    script: |
+      # Writes matching ExportOptions.plist to $HOME/export_options.plist
+      xcode-project use-profiles --project ios/Runner.xcodeproj
+
+  # ---- Caching -------------------------------------------------------------
+  cache_paths: &cache_paths
+    cache_paths:
+      - $HOME/.pub-cache
+      - $HOME/Library/Caches/CocoaPods
+
+  # ---- Artifacts -----------------------------------------------------------
+  artifacts_ipa: &artifacts_ipa
+    - build/ios/ipa/*.ipa
+    - build/ios/unsigned-ipa/*.ipa
+    - build/ios/archive/*.xcarchive
+    - /tmp/xcodebuild_logs/*.log
+    - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+# =============================================================================
+workflows:
+
+  # ---------------------------------------------------------------------------
+  # 1) ios-ipa-unsigned  —  START HERE. Free. Gives you an installable .ipa.
+  #    The .ipa is unsigned; Sideloadly/AltStore re-signs it on your PC using
+  #    your free Apple ID (works 7 days, then just re-install).
+  # ---------------------------------------------------------------------------
+  ios-ipa-unsigned:
+    name: iOS Unsigned .ipa (no Apple account needed)
+    <<: *instance_mac
+
+    environment:
+      <<: *tool_versions
+      vars:
+        BUNDLE_ID: "com.kalakchi.ramyar.pos"
+        IPA_NAME: "RamyarPOS-unsigned"
+
+    triggering:
+      events:
+        - push
+        - pull_request
+        - manual
+      cancel_previous_builds: true
+
+    cache: *cache_paths
+
+    scripts:
+      - *script_versions
+      - *script_pub_get
+      - *script_pods
+      - *script_analyze
+      - name: Run unit tests
+        script: |
+          flutter test
+        ignore_failure: true
+
+      - name: Build unsigned release app
+        script: |
+          flutter build ios --release --no-codesign
+
+      - name: Package the .app into a real .ipa
+        script: |
+          set -e
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          OUT_DIR="build/ios/unsigned-ipa"
+          rm -rf "$OUT_DIR"
+          mkdir -p "$OUT_DIR/Payload"
+          cp -R "$APP_PATH" "$OUT_DIR/Payload/"
+          cd "$OUT_DIR"
+          zip -qry "$IPA_NAME.ipa" Payload
+          rm -rf Payload
+          ls -lh "$IPA_NAME.ipa"
+          echo "Bundle ID inside the ipa: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+
+    artifacts: *artifacts_ipa
+
+  # ---------------------------------------------------------------------------
+  # 2) ios-release  —  signed .ipa for TestFlight / App Store.
+  #    Requires: Apple Developer Program + Code signing identities in the UI.
+  # ---------------------------------------------------------------------------
+  ios-release:
+    name: iOS Release (signed .ipa)
+    <<: *instance_mac
+
+    integrations:
+      app_store_connect: ramyar_pos_key   # <-- must match the API key NAME in Codemagic UI
+
+    environment:
+      <<: *tool_versions
+      # Codemagic fetches the matching certificate + provisioning profile from
+      # your Code signing identities automatically (no keychain steps needed).
+      ios_signing:
+        distribution_type: app_store      # app_store | ad_hoc | development | enterprise
+        bundle_identifier: "com.kalakchi.ramyar.pos"
+      vars:
+        BUNDLE_ID: "com.kalakchi.ramyar.pos"
+        XCODE_WORKSPACE: "ios/Runner.xcworkspace"
+        XCODE_SCHEME: "Runner"
+        # Fill this in (App Store Connect > App > General > App Information >
+        # Apple ID, a plain number) to auto-increment the build number from
+        # TestFlight and never hit "build number already used".
+        # APP_STORE_ID: "1234567890"
+
+    triggering:
+      events:
+        - push
+        - tag
+        - manual
+      branch_patterns:
+        - pattern: "main"
+          include: true
+          source: true
+      cancel_previous_builds: true
+
+    cache: *cache_paths
+
+    scripts:
+      - *script_versions
+      - *script_pub_get
+      - *script_pods
+      - *script_use_profiles
+      - *script_analyze
+
+      - name: Run unit tests
+        script: |
+          flutter test
+        ignore_failure: true
+
+      - name: Build signed .ipa
+        script: |
+          flutter build ipa --release \
+            --build-name=1.0.0 \
+            --build-number=$PROJECT_BUILD_NUMBER \
+            --export-options-plist=$HOME/export_options.plist
+          # Auto-increment alternative (needs APP_STORE_ID above):
+          # --build-number=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_ID") + 1))
+
+      - name: Inspect the built .ipa
+        script: |
+          ls -lh build/ios/ipa/ || true
+          unzip -l build/ios/ipa/*.ipa | head -40 || true
+
+    artifacts: *artifacts_ipa
+
+    publishing:
+      # Uncomment once your app exists in App Store Connect and you want the
+      # build uploaded on every successful run.
+      # app_store_connect:
+      #   auth: integration
+      #   submit_to_testflight: true
+      #   # beta_groups:
+      #   #   - Internal Testers
+      #   # submit_to_app_store: false
+      email:
+        recipients:
+          - arkan@example.com             # <-- PUT YOUR REAL EMAIL HERE
+        notify:
+          success: true
+          failure: true
+
+  # ---------------------------------------------------------------------------
+  # 3) ios-release-fallback  —  signed .ipa with zero UI configuration:
+  #    creates the certificate + provisioning profile from your API key.
+  #    Requires the appstore_credentials group + CERTIFICATE_PRIVATE_KEY.
+  # ---------------------------------------------------------------------------
+  ios-release-fallback:
+    name: "iOS Release (fallback: auto-create signing files)"
+    <<: *instance_mac
+
+    environment:
+      <<: *tool_versions
+      groups:
+        - appstore_credentials           # APP_STORE_CONNECT_ISSUER_ID,
+                                         # APP_STORE_CONNECT_KEY_IDENTIFIER,
+                                         # APP_STORE_CONNECT_PRIVATE_KEY,
+                                         # CERTIFICATE_PRIVATE_KEY
+      vars:
+        BUNDLE_ID: "com.kalakchi.ramyar.pos"
+
+    triggering:
+      events:
+        - manual
+
+    scripts:
+      - name: Initialize keychain
+        script: |
+          keychain initialize
+      - name: Fetch (create if missing) certificate + App Store profile
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --platform IOS \
+            --type IOS_APP_STORE \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
+            --create
+      - name: Add certificates to keychain
+        script: |
+          keychain add-certificates
+      - *script_use_profiles
+      - *script_versions
+      - *script_pub_get
+      - *script_pods
+      - name: Build signed .ipa
+        script: |
+          flutter build ipa --release \
+            --build-number=$PROJECT_BUILD_NUMBER \
+            --export-options-plist=$HOME/export_options.plist
+
+    artifacts: *artifacts_ipa

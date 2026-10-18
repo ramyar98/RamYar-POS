@@ -1,0 +1,6 @@
+# Captain (waiter) on the phone: open the free-tables list.
+view
+err 5
+settle 1
+taptext بەستراوی
+settle 2

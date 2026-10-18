@@ -1,0 +1,4 @@
+# Seat a party of 4 at table 1.
+taptext 4
+settle 3
+err 5

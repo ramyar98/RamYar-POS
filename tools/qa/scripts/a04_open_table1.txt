@@ -1,0 +1,5 @@
+# Captain sits a party at free table 1.
+settle 1
+taptext مێز 1 بەتاڵ
+settle 2
+err 5

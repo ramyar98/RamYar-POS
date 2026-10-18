@@ -1,0 +1,4 @@
+# Captain (waiter) home on the phone: full screen dump.
+view
+err 5
+settle 2

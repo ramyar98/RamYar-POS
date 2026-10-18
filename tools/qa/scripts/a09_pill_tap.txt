@@ -1,0 +1,5 @@
+# The stray-tap regression, checked on the real handset rather than in a test.
+view
+tap 183 52
+settle 2
+shot confirm_dialog

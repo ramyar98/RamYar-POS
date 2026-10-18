@@ -1,0 +1,4 @@
+# Send the order to the till from the phone.
+taptext ناردن
+settle 3
+err 5

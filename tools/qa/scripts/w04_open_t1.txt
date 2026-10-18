@@ -1,0 +1,5 @@
+# The cashier opens the table the captain rang in on their phone.
+view
+release
+taptext دانیشتوو مێز 1 03:26 PM د.ع 25000
+settle 3

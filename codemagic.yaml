@@ -60,6 +60,8 @@ definitions:
   script_pods: &script_pods
     name: Install CocoaPods dependencies
     script: |
+      # No-op today: this project resolves its plugins with Swift Package
+      # Manager (ios/ has no Podfile). Kept so a Podfile added later still runs.
       find . -name "Podfile" -execdir pod install \;
 
   script_analyze: &script_analyze

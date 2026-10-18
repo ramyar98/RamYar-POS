@@ -23,6 +23,21 @@ const int kDiscoveryPort = _discoveryPort;
 const Duration _broadcastInterval = Duration(seconds: 1);
 const Duration _discoveryTimeout = Duration(seconds: 6);
 
+/// How often an iOS build repeats its unicast sweep (see [_sweepLanUnicast]).
+///
+/// It has to stay under [_discoveryTimeout]: a device drops a server it has not
+/// heard from for six seconds, so a slower sweep would drop the phone between
+/// two packets and hand the floor back to a stale address.
+const Duration _iosSweepInterval = Duration(seconds: 5);
+
+/// True on an iPhone or iPad build.
+///
+/// `defaultTargetPlatform` rather than `Platform.isIOS` so a test can drive the
+/// iOS-only path with `debugDefaultTargetPlatformOverride`, the same way the
+/// rest of the app fakes a platform.
+bool get _isIOSPlatform =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
 /// The machine's hostname, read once per process.
 ///
 /// It cannot change while the app runs, and asking the OS for it on every
@@ -87,6 +102,7 @@ class NetworkDiscoveryService {
   RawDatagramSocket? _udpSocket;
   Timer? _broadcastTimer;
   Timer? _cleanupTimer;
+  Timer? _iosSweepTimer;
   bool _isListening = false;
   String? _myIp;
   bool _advertiseRegistryOnly = false;
@@ -238,6 +254,17 @@ class NetworkDiscoveryService {
         (_) => _broadcast(serverPort),
       );
       _broadcast(serverPort);
+      if (_isIOSPlatform) {
+        // An iPhone or iPad can be the hub (the owner's phone does exactly
+        // that), but its broadcast never leaves the device on iOS 14+ without
+        // Apple's Multicast Networking entitlement. The unicast sweep is what
+        // makes it discoverable at all on the shop's Wi-Fi.
+        _iosSweepTimer = Timer.periodic(
+          _iosSweepInterval,
+          (_) => _sweepLanUnicast(serverPort),
+        );
+        _sweepLanUnicast(serverPort);
+      }
       appLog('[Discovery] Broadcasting on $_myIp:$serverPort'
           '${_advertiseRegistryOnly ? ' (owner peer hub - accounts only)' : ''}');
       return true;
@@ -250,27 +277,76 @@ class NetworkDiscoveryService {
   void _broadcast(int serverPort) {
     if (_disposed || _udpSocket == null || _myIp == null) return;
     try {
-      final payload = jsonEncode({
-        'type': 'ramyar_pos_beacon',
-        'version': 1,
-        'ip': _myIp,
-        'port': serverPort,
-        'role': 'cashier',
-        // The decisive field. `role` above has always said 'cashier' for every
-        // hub in the app, so it cannot be what tells one hub from another -
-        // this is. A device that only relays the account registry says so, and
-        // a captain or cashier on the same Wi-Fi passes it over for the
-        // cashier server that can actually take their orders.
-        'registryOnly': _advertiseRegistryOnly,
-        'hostname': _localHostname,
-      });
-      final data = utf8.encode(payload);
       _udpSocket!.send(
-        data,
+        _beaconPayload(serverPort),
         InternetAddress('255.255.255.255'),
         _discoveryPort,
       );
     } catch (_) {}
+  }
+
+  /// The beacon body, shared by the broadcast and the iOS unicast sweep so the
+  /// two can never drift apart and a listener can read either one the same way.
+  List<int> _beaconPayload(int serverPort) {
+    final payload = jsonEncode({
+      'type': 'ramyar_pos_beacon',
+      'version': 1,
+      'ip': _myIp,
+      'port': serverPort,
+      'role': 'cashier',
+      // The decisive field. `role` above has always said 'cashier' for every
+      // hub in the app, so it cannot be what tells one hub from another -
+      // this is. A device that only relays the account registry says so, and
+      // a captain or cashier on the same Wi-Fi passes it over for the
+      // cashier server that can actually take their orders.
+      'registryOnly': _advertiseRegistryOnly,
+      'hostname': _localHostname,
+    });
+    return utf8.encode(payload);
+  }
+
+  /// Every host of [localIp]'s /24 that a sweep should send the beacon to,
+  /// leaving out the addresses this device already owns.
+  ///
+  /// Empty for an address outside the restaurant's private range: sweeping a
+  /// /24 out of a carrier or public address would just be 254 packets of noise.
+  /// Exposed so the test can pin the range the iOS hub depends on, since a
+  /// broadcast is the one thing iOS will not send without Apple's multicast
+  /// entitlement.
+  @visibleForTesting
+  List<String> sweepTargetsFor(String localIp, Iterable<String> ownedIps) {
+    if (!_isPreferredPrivateRange(localIp)) return const [];
+    final lastDot = localIp.lastIndexOf('.');
+    if (lastDot <= 0) return const [];
+    final prefix = localIp.substring(0, lastDot);
+    final owned = ownedIps.toSet();
+    return [
+      for (var host = 1; host <= 254; host++)
+        if (!owned.contains('$prefix.$host')) '$prefix.$host',
+    ];
+  }
+
+  /// Sends the beacon to every host of this device's /24 as plain unicast.
+  ///
+  /// iOS never puts our broadcast on the wire: since iOS 14, sending to a
+  /// broadcast or multicast address needs Apple's Multicast Networking
+  /// entitlement, which an app that is not signed into the App Store cannot
+  /// hold - the packet is dropped without an error. A unicast packet to
+  /// 192.168.x.y needs nothing but the ordinary local-network permission, and
+  /// every peer is bound to `0.0.0.0:9877`, so it is received exactly like the
+  /// broadcast. That is what keeps an iPhone or iPad acting as the shop's hub
+  /// visible in the device list instead of reachable only by typing its
+  /// address in by hand.
+  void _sweepLanUnicast(int serverPort) {
+    if (_disposed || _udpSocket == null || _myIp == null) return;
+    final data = _beaconPayload(serverPort);
+    for (final target in sweepTargetsFor(_myIp!, _myIps)) {
+      try {
+        _udpSocket!.send(data, InternetAddress(target), _discoveryPort);
+      } catch (_) {
+        // A host that does not answer is normal; keep sweeping the rest.
+      }
+    }
   }
 
   Future<void> startListener() async {
@@ -391,6 +467,7 @@ class NetworkDiscoveryService {
 
   void stop() {
     _broadcastTimer?.cancel();
+    _iosSweepTimer?.cancel();
     _cleanupTimer?.cancel();
     _udpSocket?.close();
     _udpSocket = null;

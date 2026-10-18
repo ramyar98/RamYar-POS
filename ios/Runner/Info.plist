@@ -14,6 +14,15 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ar</string>
+		<string>ckb</string>
+		<string>ku</string>
+		<string>fa</string>
+		<string>tr</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>RAMYAR POS</string>
 	<key>CFBundlePackageType</key>
@@ -24,8 +33,17 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>پێویستی بە دەستگەیشتن بە تۆڕی ناوخۆیی هەیە بۆ دۆزینەوە و پەیوەندیکردن بە ئامێری کاشێر و چاپکەری وەسڵ لەسەر هەمان Wi-Fi. Local network access is required to find and connect to the cashier device and receipt printers on the same Wi-Fi.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -53,6 +71,8 @@
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationLandscapeLeft</string>

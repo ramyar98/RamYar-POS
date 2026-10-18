@@ -80,8 +80,11 @@ jobs:
       - name: Get Flutter packages
         run: flutter pub get
 
-      - name: Install CocoaPods dependencies
-        run: find . -name "Podfile" -execdir pod install \;
+      - name: Install CocoaPods dependencies (no-op - Swift Package Manager)
+        run: |
+          # ios/ has no Podfile - plugins come from Swift Package Manager. The
+          # step stays so a Podfile added later is still installed.
+          find . -name "Podfile" -execdir pod install \;
 
       - name: Static analysis (non-blocking)
         run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
@@ -170,8 +173,11 @@ jobs:
       - name: Get Flutter packages
         run: flutter pub get
 
-      - name: Install CocoaPods dependencies
-        run: find . -name "Podfile" -execdir pod install \;
+      - name: Install CocoaPods dependencies (no-op - Swift Package Manager)
+        run: |
+          # ios/ has no Podfile - plugins come from Swift Package Manager. The
+          # step stays so a Podfile added later is still installed.
+          find . -name "Podfile" -execdir pod install \;
 
       - name: Install Codemagic CLI tools (keychain / xcode-project helpers)
         run: |

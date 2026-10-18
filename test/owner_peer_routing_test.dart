@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ramyar_pos/services/network_discovery_service.dart';
@@ -229,6 +230,84 @@ void main() {
       expect(beacon['type'], 'ramyar_pos_beacon');
       expect(beacon['registryOnly'], isFalse,
           reason: 'the cashier hub is the one a captain must be able to reach');
+    });
+
+    test('the iOS sweep covers the whole /24 except this device', () {
+      // iOS will not put a broadcast on the wire without Apple's multicast
+      // entitlement, so a sweep is the only way an iPhone or iPad that is the
+      // shop's hub is ever found. It has to reach every address a listener
+      // could be sitting on, and nothing outside the shop's own range.
+      final discovery = NetworkDiscoveryService();
+      try {
+        final targets = discovery.sweepTargetsFor(
+          '192.168.8.116',
+          const ['192.168.8.116'],
+        );
+        expect(targets, hasLength(253));
+        expect(targets, contains('192.168.8.1'));
+        expect(targets, contains('192.168.8.254'));
+        expect(targets, isNot(contains('192.168.8.116')),
+            reason: 'a device never needs to discover itself');
+
+        expect(
+          discovery.sweepTargetsFor('10.0.5.20', const []),
+          hasLength(254),
+          reason: 'a shop on a /8 is still swept one /24 at a time',
+        );
+        expect(
+          discovery.sweepTargetsFor('172.20.3.9', const []),
+          contains('172.20.3.1'),
+        );
+        expect(
+          discovery.sweepTargetsFor('8.8.8.8', const []),
+          isEmpty,
+          reason: 'a public address is not the shop LAN',
+        );
+        expect(
+          discovery.sweepTargetsFor('172.99.3.9', const []),
+          isEmpty,
+          reason: 'only 172.16.0.0/12 is private - 172.99 is not',
+        );
+        expect(discovery.sweepTargetsFor('127.0.0.1', const []), isEmpty);
+      } finally {
+        discovery.dispose();
+      }
+    });
+
+    test('an iOS hub still announces itself on the wire', () async {
+      // The iOS branch runs a sweep as well as the broadcast, and the beacon it
+      // carries has to stay exactly the shape every listener already parses.
+      final socket = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        kDiscoveryPort,
+      );
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final service = NetworkDiscoveryService();
+      try {
+        expect(await service.startBroadcaster(serverPort: 19878), isTrue);
+        final arrived = Completer<Map<String, dynamic>>();
+        socket.listen((event) {
+          if (event != RawSocketEvent.read || arrived.isCompleted) return;
+          final datagram = socket.receive();
+          if (datagram == null || datagram.data.isEmpty) return;
+          try {
+            final json =
+                jsonDecode(utf8.decode(datagram.data)) as Map<String, dynamic>;
+            if (json['port'] != 19878) return;
+            arrived.complete(json);
+          } catch (_) {
+            // Not our beacon - keep listening.
+          }
+        });
+        final beacon = await arrived.future.timeout(const Duration(seconds: 10));
+        expect(beacon['type'], 'ramyar_pos_beacon');
+        expect(beacon['version'], 1);
+        expect(beacon['registryOnly'], isFalse);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+        service.dispose();
+        socket.close();
+      }
     });
   });
 }

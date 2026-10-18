@@ -109,7 +109,10 @@ workflows:
       events:
         - push
         - pull_request
-        - manual
+      branch_patterns:
+        - pattern: "*"
+          include: true
+          source: true
       cancel_previous_builds: true
 
     cache: *cache_paths
@@ -175,7 +178,6 @@ workflows:
       events:
         - push
         - tag
-        - manual
       branch_patterns:
         - pattern: "main"
           include: true
@@ -247,9 +249,10 @@ workflows:
       vars:
         BUNDLE_ID: "com.kalakchi.ramyar.pos"
 
-    triggering:
-      events:
-        - manual
+    # No `triggering` block on purpose: a workflow without `events` can only be
+    # started manually from the Codemagic UI. This one needs API-key secrets, so
+    # it must never run automatically on every push.
+    # ("manual" is NOT a valid value for triggering.events.)
 
     scripts:
       - name: Initialize keychain

@@ -1,3 +1,15 @@
 {
-    "java.configuration.updateBuildConfiguration": "automatic"
+    "java.configuration.updateBuildConfiguration": "automatic",
+
+    // Validates codemagic.yaml against Codemagic's official JSON schema while
+    // you type, so invalid keys/values (e.g. a bad triggering event) are caught
+    // before pushing. Requires the "YAML" extension (redhat.vscode-yaml).
+    "yaml.schemas": {
+        "https://codemagic.io/codemagic-schema.json": "codemagic.yaml"
+    },
+
+    // Keeps local files in sync with .gitattributes (repo stores LF).
+    "files.eol": "\n",
+    "files.insertFinalNewline": true,
+    "files.trimTrailingWhitespace": true
 }

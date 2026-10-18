@@ -1,306 +1,204 @@
-# =============================================================================
-#  Codemagic CI/CD — Ramyar POS  (iOS built 100% in the cloud, no Mac needed)
-# -----------------------------------------------------------------------------
-#  Project   : ramyar_pos              Bundle ID : com.kalakchi.ramyar.pos
-#  Workspace : ios/Runner.xcworkspace  Scheme    : Runner
-#  Flutter   : 3.47.7 / Dart 3.13.5   iOS min : 15.0
-#
-#  WHY THIS FLUTTER VERSION?
-#    pubspec.yaml declares `sdk: ^3.12.1`. The official Flutter 3.38.5 ships
-#    Dart 3.10.4, so `flutter pub get` dies with "version solving failed".
-#    3.47.7 ships Dart 3.13.5 (satisfies ^3.12.1) and also supports the
-#    Xcode 26/27 installed on Codemagic build machines. It needs iOS 15+,
-#    which is why IPHONEOS_DEPLOYMENT_TARGET is 15.0 in project.pbxproj.
-#
-#  WORKFLOWS IN THIS FILE
-#    1. ios-ipa-unsigned    -> FREE, works TODAY. Produces a real .ipa
-#                              (unsigned) that you can install on iPhone with
-#                              Sideloadly / AltStore using a FREE Apple ID.
-#                              No Apple Developer Program required.
-#    2. ios-release         -> signed .ipa for TestFlight / App Store.
-#                              Needs Apple Developer Program ($99/yr).
-#    3. ios-release-fallback-> same, but auto-creates cert+profile from API key.
-#
-#  FIRST RUN (do this now):
-#    github.com -> push this file at the repo root
-#    codemagic.io -> Add application -> pick the repo -> select the workflow
-#    "iOS Unsigned .ipa" -> Start new build -> download the .ipa artifact.
-#
-#  LATER (after you buy the Apple Developer Program):
-#    a. Team settings -> Integrations -> App Store Connect -> upload your .p8,
-#       name the key exactly:  ramyar_pos_key
-#    b. Team settings -> Code signing identities -> generate an
-#       "Apple Distribution" certificate and an "App Store" provisioning
-#       profile for com.kalakchi.ramyar.pos.
-#    c. Run the "iOS Release (signed .ipa)" workflow.
-# =============================================================================
-
 definitions:
-  # ---- Build machine -------------------------------------------------------
-  instance_mac: &instance_mac
-    instance_type: mac_mini_m2        # mac_mini_m4 is also available
-    max_build_duration: 120           # minutes (1–120)
-
-  # ---- Toolchain versions --------------------------------------------------
-  # Pinned on purpose: silent Flutter/Xcode upgrades are the #1 cause of
-  # "it built yesterday" failures.
-  tool_versions: &tool_versions
-    flutter: "3.47.7"                 # Dart 3.13.5 -> satisfies pubspec's ^3.12.1
-    xcode: latest                     # newest stable on the machine (pin later, e.g. "26.6")
+  instance_mac:
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+  tool_versions:
+    flutter: 3.47.7
+    xcode: latest
     cocoapods: default
-
-  # ---- Reusable script steps ----------------------------------------------
-  script_versions: &script_versions
+  script_versions: &id002
     name: Print toolchain versions
-    script: |
-      flutter --version
-      dart --version
-      xcodebuild -version
-      pod --version
-
-      # Fail here, with a readable message, when the machine's Dart is older than
-      # pubspec.yaml allows - instead of dying later inside `flutter pub get`
-      # with "Because ramyar_pos requires SDK version ^3.12.1 ... version
-      # solving failed".
-      need=$(awk '/^  sdk: \^/{gsub(/[^0-9.]/,"",$2); print $2; exit}' pubspec.yaml)
-      have=$(dart --version 2>&1 | awk '{print $4}')
-      echo "Dart required >= $need | installed $have"
-      awk -v n="$need" -v h="$have" 'BEGIN{split(n,a,".");split(h,b,".");
-        for(i=1;i<=3;i++){ if(b[i]+0>a[i]+0) exit 0; if(b[i]+0<a[i]+0) exit 1 } }' /dev/null \
-        || { echo "ERROR: the pinned Flutter ships Dart $have, but this project needs >= $need."; \
-             echo "Fix: set environment.flutter in codemagic.yaml to a stable release whose Dart >= $need."; \
-             exit 1; }
-
-  script_pub_get: &script_pub_get
+    script: "flutter --version\ndart --version\nxcodebuild -version\npod --version\n\
+      \n# Fail here, with a readable message, when the machine's Dart is older than\n\
+      # pubspec.yaml allows - instead of dying later inside `flutter pub get`\n# with\
+      \ \"Because ramyar_pos requires SDK version ^3.12.1 ... version\n# solving failed\"\
+      .\nneed=$(awk '/^  sdk: \\^/{gsub(/[^0-9.]/,\"\",$2); print $2; exit}' pubspec.yaml)\n\
+      have=$(dart --version 2>&1 | awk '{print $4}')\necho \"Dart required >= $need\
+      \ | installed $have\"\nawk -v n=\"$need\" -v h=\"$have\" 'BEGIN{split(n,a,\"\
+      .\");split(h,b,\".\");\n  for(i=1;i<=3;i++){ if(b[i]+0>a[i]+0) exit 0; if(b[i]+0<a[i]+0)\
+      \ exit 1 } }' /dev/null \\\n  || { echo \"ERROR: the pinned Flutter ships Dart\
+      \ $have, but this project needs >= $need.\"; \\\n       echo \"Fix: set environment.flutter\
+      \ in codemagic.yaml to a stable release whose Dart >= $need.\"; \\\n       exit\
+      \ 1; }\n"
+  script_pub_get: &id003
     name: Get Flutter packages
-    script: |
-      flutter pub get
+    script: 'flutter pub get
 
-  script_pods: &script_pods
+      '
+  script_pods: &id004
     name: Install CocoaPods dependencies
-    script: |
-      # No-op today: this project resolves its plugins with Swift Package
+    script: '# No-op today: this project resolves its plugins with Swift Package
+
       # Manager (ios/ has no Podfile). Kept so a Podfile added later still runs.
+
       find . -name "Podfile" -execdir pod install \;
 
-  script_analyze: &script_analyze
+      '
+  script_analyze: &id005
     name: Static analysis (non-blocking)
-    script: |
-      flutter analyze --no-fatal-infos --no-fatal-warnings || true
+    script: 'flutter analyze --no-fatal-infos --no-fatal-warnings || true
 
-  script_use_profiles: &script_use_profiles
+      '
+  script_use_profiles: &id007
     name: Set up code signing settings on the Xcode project
-    script: |
-      # Writes matching ExportOptions.plist to $HOME/export_options.plist
+    script: '# Writes matching ExportOptions.plist to $HOME/export_options.plist
+
       xcode-project use-profiles --project ios/Runner.xcodeproj
 
-  # ---- Caching -------------------------------------------------------------
-  cache_paths: &cache_paths
+      '
+  cache_paths: &id001
     cache_paths:
-      - $HOME/.pub-cache
-      - $HOME/Library/Caches/CocoaPods
-
-  # ---- Artifacts -----------------------------------------------------------
-  artifacts_ipa: &artifacts_ipa
-    - build/ios/ipa/*.ipa
-    - build/ios/unsigned-ipa/*.ipa
-    - build/ios/archive/*.xcarchive
-    - /tmp/xcodebuild_logs/*.log
-    - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
-
-# =============================================================================
+    - $HOME/.pub-cache
+    - $HOME/Library/Caches/CocoaPods
+  artifacts_ipa: &id006
+  - build/ios/ipa/*.ipa
+  - build/ios/unsigned-ipa/*.ipa
+  - build/ios/archive/*.xcarchive
+  - /tmp/xcodebuild_logs/*.log
+  - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 workflows:
-
-  # ---------------------------------------------------------------------------
-  # 1) ios-ipa-unsigned  —  START HERE. Free. Gives you an installable .ipa.
-  #    The .ipa is unsigned; Sideloadly/AltStore re-signs it on your PC using
-  #    your free Apple ID (works 7 days, then just re-install).
-  # ---------------------------------------------------------------------------
   ios-ipa-unsigned:
+    instance_type: mac_mini_m2
+    max_build_duration: 120
     name: iOS Unsigned .ipa (no Apple account needed)
-    <<: *instance_mac
-
     environment:
-      <<: *tool_versions
+      flutter: 3.47.7
+      xcode: latest
+      cocoapods: default
       vars:
-        BUNDLE_ID: "com.kalakchi.ramyar.pos"
-        IPA_NAME: "RamyarPOS-unsigned"
-
+        BUNDLE_ID: com.kalakchi.ramyar.pos
+        IPA_NAME: RamyarPOS-unsigned
     triggering:
       events:
-        - push
-        - pull_request
+      - push
+      - pull_request
       branch_patterns:
-        - pattern: "*"
-          include: true
-          source: true
+      - pattern: '*'
+        include: true
+        source: true
       cancel_previous_builds: true
-
-    cache: *cache_paths
-
+    cache: *id001
     scripts:
-      - *script_versions
-      - *script_pub_get
-      - *script_pods
-      - *script_analyze
-      - name: Run unit tests
-        script: |
-          flutter test
-        ignore_failure: true
+    - *id002
+    - *id003
+    - *id004
+    - *id005
+    - name: Run unit tests
+      script: 'flutter test
 
-      - name: Build unsigned release app
-        script: |
-          flutter build ios --release --no-codesign
+        '
+      ignore_failure: true
+    - name: Build unsigned release app
+      script: 'flutter build ios --release --no-codesign
 
-      - name: Package the .app into a real .ipa
-        script: |
-          set -e
-          APP_PATH="build/ios/iphoneos/Runner.app"
-          OUT_DIR="build/ios/unsigned-ipa"
-          rm -rf "$OUT_DIR"
-          mkdir -p "$OUT_DIR/Payload"
-          cp -R "$APP_PATH" "$OUT_DIR/Payload/"
-          cd "$OUT_DIR"
-          zip -qry "$IPA_NAME.ipa" Payload
-          rm -rf Payload
-          ls -lh "$IPA_NAME.ipa"
-          echo "Bundle ID inside the ipa: $(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+        '
+    - name: Package the .app into a real .ipa
+      script: 'set -e
 
-    artifacts: *artifacts_ipa
+        APP_PATH="build/ios/iphoneos/Runner.app"
 
-  # ---------------------------------------------------------------------------
-  # 2) ios-release  —  signed .ipa for TestFlight / App Store.
-  #    Requires: Apple Developer Program + Code signing identities in the UI.
-  # ---------------------------------------------------------------------------
+        OUT_DIR="build/ios/unsigned-ipa"
+
+        rm -rf "$OUT_DIR"
+
+        mkdir -p "$OUT_DIR/Payload"
+
+        cp -R "$APP_PATH" "$OUT_DIR/Payload/"
+
+        cd "$OUT_DIR"
+
+        zip -qry "$IPA_NAME.ipa" Payload
+
+        rm -rf Payload
+
+        ls -lh "$IPA_NAME.ipa"
+
+        echo "Bundle ID inside the ipa: $(/usr/libexec/PlistBuddy -c ''Print :CFBundleIdentifier''
+        "$APP_PATH/Info.plist")"
+
+        '
+    artifacts: *id006
   ios-release:
+    instance_type: mac_mini_m2
+    max_build_duration: 120
     name: iOS Release (signed .ipa)
-    <<: *instance_mac
-
     integrations:
-      app_store_connect: ramyar_pos_key   # <-- must match the API key NAME in Codemagic UI
-
+      app_store_connect: ramyar_pos_key
     environment:
-      <<: *tool_versions
-      # Codemagic fetches the matching certificate + provisioning profile from
-      # your Code signing identities automatically (no keychain steps needed).
+      flutter: 3.47.7
+      xcode: latest
+      cocoapods: default
       ios_signing:
-        distribution_type: app_store      # app_store | ad_hoc | development | enterprise
-        bundle_identifier: "com.kalakchi.ramyar.pos"
+        distribution_type: app_store
+        bundle_identifier: com.kalakchi.ramyar.pos
       vars:
-        BUNDLE_ID: "com.kalakchi.ramyar.pos"
-        XCODE_WORKSPACE: "ios/Runner.xcworkspace"
-        XCODE_SCHEME: "Runner"
-        # Fill this in (App Store Connect > App > General > App Information >
-        # Apple ID, a plain number) to auto-increment the build number from
-        # TestFlight and never hit "build number already used".
-        # APP_STORE_ID: "1234567890"
-
+        BUNDLE_ID: com.kalakchi.ramyar.pos
+        XCODE_WORKSPACE: ios/Runner.xcworkspace
+        XCODE_SCHEME: Runner
     triggering:
       events:
-        - push
-        - tag
+      - push
+      - tag
       branch_patterns:
-        - pattern: "main"
-          include: true
-          source: true
+      - pattern: main
+        include: true
+        source: true
       cancel_previous_builds: true
-
-    cache: *cache_paths
-
+    cache: *id001
     scripts:
-      - *script_versions
-      - *script_pub_get
-      - *script_pods
-      - *script_use_profiles
-      - *script_analyze
+    - *id002
+    - *id003
+    - *id004
+    - *id007
+    - *id005
+    - name: Run unit tests
+      script: 'flutter test
 
-      - name: Run unit tests
-        script: |
-          flutter test
-        ignore_failure: true
+        '
+      ignore_failure: true
+    - name: Build signed .ipa
+      script: "flutter build ipa --release \\\n  --build-name=1.0.0 \\\n  --build-number=$PROJECT_BUILD_NUMBER\
+        \ \\\n  --export-options-plist=$HOME/export_options.plist\n# Auto-increment\
+        \ alternative (needs APP_STORE_ID above):\n# --build-number=$(($(app-store-connect\
+        \ get-latest-testflight-build-number \"$APP_STORE_ID\") + 1))\n"
+    - name: Inspect the built .ipa
+      script: 'ls -lh build/ios/ipa/ || true
 
-      - name: Build signed .ipa
-        script: |
-          flutter build ipa --release \
-            --build-name=1.0.0 \
-            --build-number=$PROJECT_BUILD_NUMBER \
-            --export-options-plist=$HOME/export_options.plist
-          # Auto-increment alternative (needs APP_STORE_ID above):
-          # --build-number=$(($(app-store-connect get-latest-testflight-build-number "$APP_STORE_ID") + 1))
+        unzip -l build/ios/ipa/*.ipa | head -40 || true
 
-      - name: Inspect the built .ipa
-        script: |
-          ls -lh build/ios/ipa/ || true
-          unzip -l build/ios/ipa/*.ipa | head -40 || true
-
-    artifacts: *artifacts_ipa
-
-    publishing:
-      # Nothing is published automatically yet - the signed build is fully
-      # usable as an artifact before any Apple account exists.
-      #
-      # 1) Build notifications: uncomment and put YOUR email here.
-      # email:
-      #   recipients:
-      #     - you@example.com
-      #   notify:
-      #     success: true
-      #     failure: true
-      #
-      # 2) TestFlight upload: needs an app record in App Store Connect.
-      # app_store_connect:
-      #   auth: integration
-      #   submit_to_testflight: true
-      #   # beta_groups:
-      #   #   - Internal Testers
-      #   # submit_to_app_store: false
-
-  # ---------------------------------------------------------------------------
-  # 3) ios-release-fallback  —  signed .ipa with zero UI configuration:
-  #    creates the certificate + provisioning profile from your API key.
-  #    Requires the appstore_credentials group + CERTIFICATE_PRIVATE_KEY.
-  # ---------------------------------------------------------------------------
+        '
+    artifacts: *id006
+    publishing: {}
   ios-release-fallback:
-    name: "iOS Release (fallback: auto-create signing files)"
-    <<: *instance_mac
-
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    name: 'iOS Release (fallback: auto-create signing files)'
     environment:
-      <<: *tool_versions
+      flutter: 3.47.7
+      xcode: latest
+      cocoapods: default
       groups:
-        - appstore_credentials           # APP_STORE_CONNECT_ISSUER_ID,
-                                         # APP_STORE_CONNECT_KEY_IDENTIFIER,
-                                         # APP_STORE_CONNECT_PRIVATE_KEY,
-                                         # CERTIFICATE_PRIVATE_KEY
+      - appstore_credentials
       vars:
-        BUNDLE_ID: "com.kalakchi.ramyar.pos"
-
-    # No `triggering` block on purpose: a workflow without `events` can only be
-    # started manually from the Codemagic UI. This one needs API-key secrets, so
-    # it must never run automatically on every push.
-    # ("manual" is NOT a valid value for triggering.events.)
-
+        BUNDLE_ID: com.kalakchi.ramyar.pos
     scripts:
-      - name: Initialize keychain
-        script: |
-          keychain initialize
-      - name: Fetch (create if missing) certificate + App Store profile
-        script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --platform IOS \
-            --type IOS_APP_STORE \
-            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
-            --create
-      - name: Add certificates to keychain
-        script: |
-          keychain add-certificates
-      - *script_use_profiles
-      - *script_versions
-      - *script_pub_get
-      - *script_pods
-      - name: Build signed .ipa
-        script: |
-          flutter build ipa --release \
-            --build-number=$PROJECT_BUILD_NUMBER \
-            --export-options-plist=$HOME/export_options.plist
+    - name: Initialize keychain
+      script: 'keychain initialize
 
-    artifacts: *artifacts_ipa
+        '
+    - name: Fetch (create if missing) certificate + App Store profile
+      script: "app-store-connect fetch-signing-files \"$BUNDLE_ID\" \\\n  --platform\
+        \ IOS \\\n  --type IOS_APP_STORE \\\n  --certificate-key=@env:CERTIFICATE_PRIVATE_KEY\
+        \ \\\n  --create\n"
+    - name: Add certificates to keychain
+      script: 'keychain add-certificates
+
+        '
+    - *id007
+    - *id002
+    - *id003
+    - *id004
+    - name: Build signed .ipa
+      script: "flutter build ipa --release \\\n  --build-number=$PROJECT_BUILD_NUMBER\
+        \ \\\n  --export-options-plist=$HOME/export_options.plist\n"
+    artifacts: *id006

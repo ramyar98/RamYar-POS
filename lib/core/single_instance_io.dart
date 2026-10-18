@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 
 /// Loopback port this *install* claims as its "already running" marker.
@@ -47,13 +47,6 @@ ServerSocket? _held;
 /// exits. A *different* install - a second shop, or one of the test instances -
 /// gets its own lock and boots normally.
 Future<bool> ensureSingleInstance() async {
-  // A phone or tablet already guarantees this: the OS never starts a second
-  // copy of an installed app, it brings the running one forward. The lock only
-  // earns its keep on a desktop, where the same exe can be double-clicked or a
-  // bat file run twice - and taking it on a phone would add one more way for
-  // the POS to refuse to open, because a loopback port this app happens to
-  // share with another app on the device would look like "already running".
-  if (Platform.isAndroid || Platform.isIOS) return true;
   try {
     _held = await ServerSocket.bind(
       InternetAddress.loopbackIPv4,

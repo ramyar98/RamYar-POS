@@ -159,7 +159,7 @@ class LocalDatabase {
 
   /// Current on-disk schema version. Bumped whenever [_createTables] or
   /// [_migrate] gain a table, a column or an index.
-  static const int schemaVersion = 44;
+  static const int schemaVersion = 45;
 
   Future<void> init({bool inMemory = false, String? path}) async {
     if (_db != null) return;
@@ -369,6 +369,7 @@ class LocalDatabase {
         sentToCashier INTEGER DEFAULT 0,
         printedAt TEXT DEFAULT '',
         note TEXT DEFAULT '',
+        noteUpdatedAt TEXT DEFAULT '',
         createdBy INTEGER DEFAULT 0,
         openedBy INTEGER DEFAULT 0,
         isDelivery INTEGER DEFAULT 0,
@@ -1613,6 +1614,17 @@ class LocalDatabase {
         )
       ''');
     }
+    if (oldVersion < 45) {
+      // v45: the admin's table-notes page filters by day, so the tables row
+      // remembers when its note was last written. Existing notes keep an
+      // empty stamp and stay visible under the "هەموو" period only.
+      try {
+        await db.execute(
+          "ALTER TABLE tables ADD COLUMN noteUpdatedAt TEXT DEFAULT ''",
+        );
+      } catch (_) {}
+    }
+
     await _createSyncIndexes(db);
   }
 
@@ -2830,14 +2842,23 @@ class LocalDatabase {
     }, conflictAlgorithm: ConflictAlgorithm.ignore);
   }
 
-  Future<void> updateTableNote(int tableId, String note) async {
+  Future<void> updateTableNote(int tableId, String note,
+      {String? noteUpdatedAt}) async {
+    // An emptied note keeps no date; it is no longer shown anywhere.
+    final updatedAt = note.trim().isEmpty
+        ? ''
+        : (noteUpdatedAt ?? DateTime.now().toIso8601String());
     await db.update(
       'tables',
-      {'note': note},
+      {'note': note, 'noteUpdatedAt': updatedAt},
       where: 'id = ?',
       whereArgs: [tableId],
     );
-    _emitMutation('updateTableNote', {'tableId': tableId, 'note': note});
+    _emitMutation('updateTableNote', {
+      'tableId': tableId,
+      'note': note,
+      'noteUpdatedAt': updatedAt,
+    });
   }
 
   Future<void> occupyTable(
@@ -4693,6 +4714,30 @@ class LocalDatabase {
     return (result.first['total'] as num).toDouble();
   }
 
+  Future<double> getSettledElectronicInRange(String from, String to) async {
+    final result = await db.rawQuery(
+      "SELECT COALESCE(SUM(totalAmount), 0) as total FROM settled_orders WHERE settledAt >= ? AND settledAt <= ? AND paymentMethod IN ('fib','fastpay','superqi','zincash','nass','switch')",
+      [from, to],
+    );
+    return (result.first['total'] as num).toDouble();
+  }
+
+  Future<double> getSettledCashPlusElectronicInRange(String from, String to) async {
+    final result = await db.rawQuery(
+      "SELECT COALESCE(SUM(totalAmount), 0) as total FROM settled_orders WHERE settledAt >= ? AND settledAt <= ? AND paymentMethod NOT IN ('debt')",
+      [from, to],
+    );
+    return (result.first['total'] as num).toDouble();
+  }
+
+  Future<double> getCashierExpensesTotalInRange(String from, String to) async {
+    final result = await db.rawQuery(
+      'SELECT COALESCE(SUM(price), 0) as total FROM cashier_expenses WHERE createdAt >= ? AND createdAt <= ?',
+      [from, to],
+    );
+    return (result.first['total'] as num).toDouble();
+  }
+
   Future<List<SettledOrder>> getSettledOrdersByTableId(int tableId) async {
     final maps = await db.query(
       'settled_orders',
@@ -5155,6 +5200,31 @@ class LocalDatabase {
     return maps.map((m) => Purchase.fromMap(m)).toList();
   }
 
+  Future<List<Purchase>> getPurchasesInRange(String from, String to) async {
+    final maps = await db.query(
+      'purchases',
+      where: 'purchasedAt >= ? AND purchasedAt <= ?',
+      whereArgs: [from, to],
+      orderBy: 'purchasedAt DESC',
+    );
+    return maps.map((m) => Purchase.fromMap(m)).toList();
+  }
+
+  Future<List<CashierExpense>> getAllCashierExpenses() async {
+    final maps = await db.query('cashier_expenses', orderBy: 'createdAt DESC');
+    return maps.map((m) => CashierExpense.fromMap(m)).toList();
+  }
+
+  Future<List<CashierExpense>> getCashierExpensesInRange(String from, String to) async {
+    final maps = await db.query(
+      'cashier_expenses',
+      where: 'createdAt >= ? AND createdAt <= ?',
+      whereArgs: [from, to],
+      orderBy: 'createdAt DESC',
+    );
+    return maps.map((m) => CashierExpense.fromMap(m)).toList();
+  }
+
   Future<double> getTotalPurchasesInRange(String from, String to) async {
     final result = await db.rawQuery(
       'SELECT COALESCE(SUM(price), 0) as total FROM purchases WHERE purchasedAt >= ? AND purchasedAt <= ?',
@@ -5169,6 +5239,16 @@ class LocalDatabase {
       [from, to],
     );
     return (result.first['total'] as num).toDouble();
+  }
+
+  Future<List<Refund>> getRefundsInRange(String from, String to) async {
+    final maps = await db.query(
+      'refunds',
+      where: 'refundedAt >= ? AND refundedAt <= ?',
+      whereArgs: [from, to],
+      orderBy: 'refundedAt DESC',
+    );
+    return maps.map((m) => Refund.fromMap(m)).toList();
   }
 
   // ==================== Refunds ====================

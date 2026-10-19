@@ -232,7 +232,7 @@ class _AdminHomePageState extends ConsumerState<AdminHomePage> {
               ),
               _dashboardButton(
                 Icons.shopping_cart_rounded,
-                context.tr('کڕینی ئەشیاکان'),
+                context.tr('خەرجیەکان'),
                 AppColors.danger,
                 () {
                   Navigator.of(context).push(
@@ -254,7 +254,7 @@ class _AdminHomePageState extends ConsumerState<AdminHomePage> {
               ),
               _dashboardButton(
                 Icons.undo_rounded,
-                context.tr('ڕەفزەکان'),
+                context.tr('ڕەتکراوەکان'),
                 AppColors.softText,
                 () {
                   Navigator.of(context).push(

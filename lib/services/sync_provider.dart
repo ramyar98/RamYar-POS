@@ -1717,6 +1717,7 @@ Future<bool> _applyMutation(LocalDatabase db, SyncMessage msg) async {
         await db.updateTableNote(
           msg.data['tableId'] as int,
           msg.data['note'] as String,
+          noteUpdatedAt: msg.data['noteUpdatedAt'] as String?,
         );
 
       case 'markCancelledItemServed':

@@ -8,6 +8,7 @@ import '../../services/app_localizations.dart';
 import '../../database/local_db.dart';
 import '../../models/debt_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/admin_date_filter_bar.dart';
 
 class AdminDebtsPage extends ConsumerStatefulWidget {
   const AdminDebtsPage({super.key});
@@ -17,9 +18,12 @@ class AdminDebtsPage extends ConsumerStatefulWidget {
 }
 
 class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
-  DateTime _start = DateTime.now();
-  DateTime _end = DateTime.now().add(const Duration(days: 1));
+  AdminDatePeriod _period = AdminDatePeriod.all;
+  AdminDatePeriodRange _range = resolveAdminDatePeriod(AdminDatePeriod.all);
   late final VoidCallback _revisionListener;
+
+  /// Sticky: the admin's chosen period survives reopening the page.
+  static const String _prefKey = 'admin_debts_date_filter';
 
   @override
   void initState() {
@@ -42,27 +46,7 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
     super.dispose();
   }
 
-  Future<void> _pickDate(bool isStart) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: isStart ? _start : _end.subtract(const Duration(days: 1)),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _start = DateTime(picked.year, picked.month, picked.day);
-        } else {
-          _end = DateTime(
-            picked.year,
-            picked.month,
-            picked.day,
-          ).add(const Duration(days: 1));
-        }
-      });
-    }
-  }
+
 
   Future<void> _deleteDebt(DebtModel debt) async {
     final confirm = await showDialog<bool>(
@@ -171,57 +155,23 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
           Container(
             padding: const EdgeInsets.all(12),
             color: Colors.white,
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickDate(true),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.primary),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        _start.toString().substring(0, 10),
-                        style: const TextStyle(color: AppColors.darkText),
-                      ),
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    context.tr('بۆ'),
-                    style: const TextStyle(color: AppColors.softText),
-                  ),
-                ),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickDate(false),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 8,
-                        horizontal: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.primary),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        _end
-                            .subtract(const Duration(days: 1))
-                            .toString()
-                            .substring(0, 10),
-                        style: const TextStyle(color: AppColors.darkText),
-                      ),
-                    ),
-                  ),
-                ),
+            child: AdminDateFilterBar(
+              options: const [
+                AdminDatePeriod.all,
+                AdminDatePeriod.today,
+                AdminDatePeriod.yesterday,
+                AdminDatePeriod.week,
+                AdminDatePeriod.custom,
               ],
+              initial: _period,
+              persist: true,
+              prefKey: _prefKey,
+              onChanged: (period, range) {
+                setState(() {
+                  _period = period;
+                  _range = range;
+                });
+              },
             ),
           ),
           Expanded(
@@ -231,7 +181,7 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
                 final allDebts = snapshot.data ?? [];
                 final debts = allDebts.where((d) {
                   final dt = DateTime.tryParse(d.createdAt);
-                  return dt != null && dt.isAfter(_start) && dt.isBefore(_end);
+                  return dt != null && _range.contains(dt);
                 }).toList();
 
                 final totalDebt = debts.fold<double>(

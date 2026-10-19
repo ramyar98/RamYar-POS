@@ -11,6 +11,7 @@ class TableModel {
   final bool sentToCashier;
   final String printedAt;
   final String note;
+  final String noteUpdatedAt;
   final int createdBy;
 
   /// The user id of whoever first seated this table (captain or cashier), or 0
@@ -104,6 +105,7 @@ class TableModel {
     this.sentToCashier = false,
     this.printedAt = '',
     this.note = '',
+    this.noteUpdatedAt = '',
     this.createdBy = 0,
     this.openedBy = 0,
     this.isDelivery = false,
@@ -128,6 +130,7 @@ class TableModel {
     'sentToCashier': sentToCashier ? 1 : 0,
     'printedAt': printedAt,
     'note': note,
+    'noteUpdatedAt': noteUpdatedAt,
     'createdBy': createdBy,
     'openedBy': openedBy,
     'isDelivery': isDelivery ? 1 : 0,
@@ -146,6 +149,7 @@ class TableModel {
     sentToCashier: map['sentToCashier'] == 1,
     printedAt: map['printedAt'] as String? ?? '',
     note: map['note'] as String? ?? '',
+    noteUpdatedAt: map['noteUpdatedAt'] as String? ?? '',
     createdBy: map['createdBy'] as int? ?? 0,
     openedBy: map['openedBy'] as int? ?? 0,
     isDelivery: mapIsDelivery(map),
@@ -164,6 +168,7 @@ class TableModel {
     bool? sentToCashier,
     String? printedAt,
     String? note,
+    String? noteUpdatedAt,
     int? createdBy,
     int? openedBy,
     bool? isDelivery,
@@ -180,6 +185,7 @@ class TableModel {
     sentToCashier: sentToCashier ?? this.sentToCashier,
     printedAt: printedAt ?? this.printedAt,
     note: note ?? this.note,
+    noteUpdatedAt: noteUpdatedAt ?? this.noteUpdatedAt,
     createdBy: createdBy ?? this.createdBy,
     openedBy: openedBy ?? this.openedBy,
     isDelivery: isDelivery ?? this.isDelivery,

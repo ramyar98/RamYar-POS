@@ -6,6 +6,7 @@ import '../../database/local_db.dart';
 import '../../models/table_model.dart';
 import '../../services/app_localizations.dart';
 import '../../services/table_note_policy.dart';
+import '../../widgets/admin_date_filter_bar.dart';
 
 class AdminTableNotesPage extends ConsumerStatefulWidget {
   const AdminTableNotesPage({super.key});
@@ -16,6 +17,11 @@ class AdminTableNotesPage extends ConsumerStatefulWidget {
 }
 
 class _AdminTableNotesPageState extends ConsumerState<AdminTableNotesPage> {
+  AdminDatePeriod _period = AdminDatePeriod.all;
+  AdminDatePeriodRange _range = resolveAdminDatePeriod(AdminDatePeriod.all);
+
+  /// Sticky: the admin's chosen period survives reopening the page.
+  static const String _prefKey = 'admin_table_notes_date_filter';
   late Future<List<TableModel>> _notesFuture;
 
   @override
@@ -27,10 +33,29 @@ class _AdminTableNotesPageState extends ConsumerState<AdminTableNotesPage> {
   Future<List<TableModel>> _loadNotes() async {
     final db = ref.read(localDbProvider);
     final tables = await db.getAllTables();
-    return tables.where((table) => table.note.trim().isNotEmpty).toList();
+    return tables.where((table) {
+      if (table.note.trim().isEmpty) return false;
+      // هەموو also keeps notes written before the edit time was recorded -
+      // their date is unknown, so no narrower period can place them.
+      if (_period == AdminDatePeriod.all) return true;
+      final dt = DateTime.tryParse(table.noteUpdatedAt);
+      if (dt == null) return false;
+      return _range.contains(dt);
+    }).toList();
   }
 
   Map<String, String> _decodeNote(String raw) => TableNote.decode(raw);
+
+  /// Compact "2026/10/19 04:30 PM" stamp for a note's last edit.
+  String _formatNoteTime(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return '';
+    String two(int n) => n.toString().padLeft(2, '0');
+    final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+    final ap = dt.hour >= 12 ? 'PM' : 'AM';
+    return '${two(dt.year)}/${two(dt.month)}/${two(dt.day)} '
+        '${two(h)}:${two(dt.minute)} $ap';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,9 +73,35 @@ class _AdminTableNotesPageState extends ConsumerState<AdminTableNotesPage> {
           ),
         ),
       ),
-      body: FutureBuilder<List<TableModel>>(
-        future: _notesFuture,
-        builder: (context, snapshot) {
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            color: Colors.white,
+            child: AdminDateFilterBar(
+              options: const [
+                AdminDatePeriod.all,
+                AdminDatePeriod.today,
+                AdminDatePeriod.yesterday,
+                AdminDatePeriod.week,
+                AdminDatePeriod.custom,
+              ],
+              initial: _period,
+              persist: true,
+              prefKey: _prefKey,
+              onChanged: (period, range) {
+                setState(() {
+                  _period = period;
+                  _range = range;
+                  _notesFuture = _loadNotes();
+                });
+              },
+            ),
+          ),
+          Expanded(
+            child: FutureBuilder<List<TableModel>>(
+              future: _notesFuture,
+              builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -93,13 +144,26 @@ class _AdminTableNotesPageState extends ConsumerState<AdminTableNotesPage> {
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              table.name,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.darkText,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  table.name,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.darkText,
+                                  ),
+                                ),
+                                if (table.noteUpdatedAt.isNotEmpty)
+                                  Text(
+                                    _formatNoteTime(table.noteUpdatedAt),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.softText,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         ],
@@ -146,7 +210,10 @@ class _AdminTableNotesPageState extends ConsumerState<AdminTableNotesPage> {
               );
             },
           );
-        },
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

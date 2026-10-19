@@ -4,6 +4,7 @@ import '../../core/colors.dart';
 import '../../core/constants.dart';
 import '../../services/app_localizations.dart';
 import '../../database/local_db.dart';
+import '../../widgets/admin_date_filter_bar.dart';
 
 class AdminFoodDemandPage extends ConsumerStatefulWidget {
   const AdminFoodDemandPage({super.key});
@@ -13,17 +14,18 @@ class AdminFoodDemandPage extends ConsumerStatefulWidget {
 }
 
 class _AdminFoodDemandPageState extends ConsumerState<AdminFoodDemandPage> {
-  DateTime _start = DateTime.now();
-  DateTime _end = DateTime.now().add(const Duration(days: 1));
+  AdminDatePeriod _period = AdminDatePeriod.today;
+  AdminDatePeriodRange _range = resolveAdminDatePeriod(AdminDatePeriod.today);
   List<_FoodDemand> _demands = [];
   bool _loading = false;
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     final db = ref.read(localDbProvider);
     final orders = await db.getSettledOrdersByDateRange(
-      _start.toIso8601String(),
-      _end.toIso8601String(),
+      _range.fromIso,
+      _range.toIso,
     );
 
     final demandMap = <String, int>{};
@@ -34,8 +36,8 @@ class _AdminFoodDemandPageState extends ConsumerState<AdminFoodDemandPage> {
       }
     }
     final cancelled = await db.getCancelledItemsByDateRange(
-      _start.toIso8601String(),
-      _end.toIso8601String(),
+      _range.fromIso,
+      _range.toIso,
     );
     for (final item in cancelled) {
       if (item.status != 'pending') continue;
@@ -55,24 +57,7 @@ class _AdminFoodDemandPageState extends ConsumerState<AdminFoodDemandPage> {
     if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _pickDate(bool isStart) async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: isStart ? _start : _end.subtract(const Duration(days: 1)),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStart) {
-          _start = DateTime(picked.year, picked.month, picked.day);
-        } else {
-          _end = DateTime(picked.year, picked.month, picked.day).add(const Duration(days: 1));
-        }
-      });
-      _load();
-    }
-  }
+
 
   @override
   void initState() {
@@ -96,30 +81,22 @@ class _AdminFoodDemandPageState extends ConsumerState<AdminFoodDemandPage> {
           Container(
             padding: const EdgeInsets.all(12),
             color: Colors.white,
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickDate(true),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                      decoration: BoxDecoration(border: Border.all(color: AppColors.primary), borderRadius: BorderRadius.circular(8)),
-                      child: Text(_start.toString().substring(0, 10), style: const TextStyle(color: AppColors.darkText)),
-                    ),
-                  ),
-                ),
-                Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text(context.tr('بۆ'), style: const TextStyle(color: AppColors.softText))),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _pickDate(false),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                      decoration: BoxDecoration(border: Border.all(color: AppColors.primary), borderRadius: BorderRadius.circular(8)),
-                      child: Text(_end.subtract(const Duration(days: 1)).toString().substring(0, 10), style: const TextStyle(color: AppColors.darkText)),
-                    ),
-                  ),
-                ),
+            child: AdminDateFilterBar(
+              options: const [
+                AdminDatePeriod.all,
+                AdminDatePeriod.today,
+                AdminDatePeriod.yesterday,
+                AdminDatePeriod.week,
+                AdminDatePeriod.custom,
               ],
+              initial: _period,
+              onChanged: (period, range) {
+                setState(() {
+                  _period = period;
+                  _range = range;
+                });
+                _load();
+              },
             ),
           ),
           Expanded(

@@ -43,6 +43,7 @@ import 'package:ramyar_pos/page/cashier/cashier_home_page.dart';
 import 'package:ramyar_pos/page/cashier/cashier_unified_table_page.dart';
 import 'package:ramyar_pos/page/cashier/cashier_table_page.dart';
 import 'package:ramyar_pos/page/cashier/cashier_cancelled_items_page.dart';
+import 'package:ramyar_pos/page/cashier/cashier_expenses_page.dart';
 import 'package:ramyar_pos/page/cashier/cashier_previous_orders_page.dart';
 import 'package:ramyar_pos/page/cashier/delivery_page.dart';
 import 'package:ramyar_pos/page/cashier/transfer_page.dart';
@@ -301,6 +302,8 @@ void main() {
     await visitPage(tester, const CashierTablePage(tableNumber: 1), '$what table');
     await visitPage(
         tester, const CashierCancelledItemsPage(), '$what cancelled');
+    await visitPage(
+        tester, const CashierExpensesPage(shiftId: 0), '$what expenses');
     await visitPage(tester, const CashierPreviousOrdersPage(shiftId: 0),
         '$what previous-orders');
     await visitPage(

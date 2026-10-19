@@ -410,10 +410,8 @@ where the **sync server** starts on the laptop device.
   or **“داخستن و چوونە دەرەوە”** *[Close and log out]* (when a shift is active)
   — closes the shift via the **Close-shift dialog**, then logs out (the only
   logout path on this page).
-- **“خەرجی”** *[Expense]* — red money-off icon — **Record-expense dialog**
-  (name + price; Cancel / Record (تۆمارکردن)).
-- **“گەڕانەوەی خەرجی”** *[Return of expense]* — blue replay icon — **Return-expense
-  dialog** (same fields; Cancel / Return (گەڕاندنەوە)).
+- **“خەرجیەکان”** *[Expenses]* — red wallet icon, shown only while a shift is
+  open — pushes the **Expense ledger page** (see below).
 - **“زیادکردنی مێز”** *[Add table]* — opens the add-table dialog.
 - **Sync indicator** — Wi-Fi icon + client count (display only).
 - **Refresh** — re-checks overdue tables and reloads the grid.
@@ -422,6 +420,26 @@ where the **sync server** starts on the laptop device.
   orders; each row can **reprint** the receipt.
 - **“ڕەتکراوەکان”** *[Cancelled]* — opens the **Cancelled items** screen.
 - **Profile avatar** — language menu only (no settings/logout here).
+
+**Expense ledger page — `lib/page/cashier/cashier_expenses_page.dart`:**
+The cashier's money-out/money-in ledger for the open shift, pushed from
+«خەرجیەکان». One table (`cashier_expenses`) backs both halves: an expense is
+stored with a **positive** price, a return with a **negative** one, and the shift
+report and «حسابەکان» read the net.
+- **App bar** — title «خەرجیەکان», a **search** button (turns the title into a
+  filter over names and amounts; carry-on digits like `20000` match `20,000`),
+  and a **refresh** button.
+- **Two sections under the app bar** — **«خەرجی»** *[Expenses]* and
+  **«گەڕانەوەی خەرجی»** *[Expense Return]*, each a scrollable list with a count
+  + total card at the top (empty state per section).
+- **FAB** — follows the selected section: **Record (تۆمارکردنی خەرجی)** or
+  **Return (گەڕانەوەی خەرجی)**; the dialog takes a name (ناوی خەرجی, *why*) and
+  an amount (نرخ), Cancel / Record (تۆمارکردن) or Return (گەڕاندنەوەی خەرجی).
+- **Replay (گەڕاندنەوەی ئەم خەرجییە)** — every expense row carries a blue replay
+  button that reopens the return form **pre-filled** with that row's name and
+  amount, so a 20,000 set put in earlier goes straight back as the same 20,000.
+- Every write goes through `addCashierExpense` (shift key + sync mutation), so
+  the admin sees the same money in «حسابەکان» and the shift report.
 
 **Bottom navigation (3 tabs):**
 - **“سەرەکی”** *[Main]* — table grid.

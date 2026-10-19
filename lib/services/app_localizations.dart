@@ -678,6 +678,34 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.english: 'Expense Return',
     AppLanguage.turkish: 'Gider İadesi',
   },
+  'گەڕاندنەوەی خەرجی': {
+    AppLanguage.badini: 'گەڕاندنەوەی خەرجی',
+    AppLanguage.arabic: 'إرجاع المصروف',
+    AppLanguage.persian: 'بازگرداندن هزینه',
+    AppLanguage.english: 'Return expense',
+    AppLanguage.turkish: 'Gideri iade et',
+  },
+  'گەڕاندنەوەی ئەم خەرجییە': {
+    AppLanguage.badini: 'گەڕاندنەوەیا ڤێ خەرجیێ',
+    AppLanguage.arabic: 'إرجاع هذا المصروف',
+    AppLanguage.persian: 'بازگرداندن این هزینه',
+    AppLanguage.english: 'Return this expense',
+    AppLanguage.turkish: 'Bu gideri iade et',
+  },
+  'گەڕان بە ناوی خەرجی': {
+    AppLanguage.badini: 'گەڕان ب ناڤێ خەرجی',
+    AppLanguage.arabic: 'ابحث باسم المصروف',
+    AppLanguage.persian: 'جستجو با نام هزینه',
+    AppLanguage.english: 'Search by expense name',
+    AppLanguage.turkish: 'Gider adına göre ara',
+  },
+  'کۆی گەڕانەوەی خەرجی': {
+    AppLanguage.badini: 'کۆیا گەڕاندنەوا خەرجی',
+    AppLanguage.arabic: 'إجمالي المصروفات المرتجعة',
+    AppLanguage.persian: 'مجموع هزینه‌های بازگشتی',
+    AppLanguage.english: 'Total returned',
+    AppLanguage.turkish: 'Toplam iade',
+  },
 
   // ===== Payment =====
   'د.ع': {
@@ -1963,6 +1991,13 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.persian: 'هیچ بازگشت هزینه‌ای وجود ندارد',
     AppLanguage.english: 'No returned expenses',
     AppLanguage.turkish: 'İade edilen gider yok',
+  },
+  'هیچ ئەنجامێک نەدۆزرایەوە': {
+    AppLanguage.badini: 'هیچ ئەنجام نەهاتنە دیتن',
+    AppLanguage.arabic: 'لا توجد نتائج',
+    AppLanguage.persian: 'نتیجه‌ای یافت نشد',
+    AppLanguage.english: 'No results found',
+    AppLanguage.turkish: 'Sonuç bulunamadı',
   },
 
   // ===== Orders =====

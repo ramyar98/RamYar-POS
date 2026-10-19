@@ -23,6 +23,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/printer_provider.dart';
 import '../../services/sync_provider.dart';
 import 'cashier_cancelled_items_page.dart';
+import 'cashier_expenses_page.dart';
 import 'cashier_previous_orders_page.dart';
 import '../../widgets/profile_icon.dart';
 import '../../widgets/table_card.dart';
@@ -181,282 +182,16 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
     );
   }
 
-  Future<void> _showExpensesSheet() async {
-    if (_activeShift == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.tr('سەرەتا شەفت دەستپێبکە')),
-          backgroundColor: AppColors.danger,
-        ),
-      );
-      return;
-    }
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 44,
-              height: 4,
-              margin: const EdgeInsets.only(top: 12, bottom: 8),
-              decoration: BoxDecoration(
-                color: AppColors.borderSide,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.account_balance_wallet_rounded,
-                    color: AppColors.danger,
-                    size: 22,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    context.tr('خەرجیەکان'),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: AppColors.darkText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, color: AppColors.borderSide),
-            _expenseSheetOption(
-              ctx,
-              value: 'expense',
-              icon: Icons.money_off_csred_rounded,
-              color: AppColors.danger,
-              title: context.tr('خەرجی'),
-            ),
-            _expenseSheetOption(
-              ctx,
-              value: 'return',
-              icon: Icons.replay_rounded,
-              color: AppColors.blue,
-              title: context.tr('گەڕانەوەی خەرجی'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+  /// Opens the cashier's expense ledger for the open shift. On the way back the
+  /// shift is reloaded so the totals the home screen shows - and the numbers the
+  /// close-shift dialog will read - already include what was recorded.
+  Future<void> _openExpensesPage() async {
+    final shift = _activeShift;
+    if (shift == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => CashierExpensesPage(shiftId: shift.id)),
     );
-    if (!mounted || choice == null) return;
-    if (choice == 'expense') {
-      await _showAddExpenseDialog();
-    } else if (choice == 'return') {
-      await _showReturnExpenseDialog();
-    }
-  }
-
-  Widget _expenseSheetOption(
-    BuildContext ctx, {
-    required String value,
-    required IconData icon,
-    required Color color,
-    required String title,
-  }) {
-    return InkWell(
-      onTap: () => Navigator.pop(ctx, value),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: AppColors.darkText,
-                ),
-              ),
-            ),
-            const Icon(Icons.chevron_left_rounded, color: AppColors.softText),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showAddExpenseDialog() async {
-    if (_activeShift == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.tr('سەرەتا شەفت دەستپێبکە')),
-          backgroundColor: AppColors.danger,
-        ),
-      );
-      return;
-    }
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final added = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => DialogControllerOwner(
-        controllers: [nameCtrl, priceCtrl],
-        child: AlertDialog(
-          title: Text(context.tr('تۆمارکردنی خەرجی')),
-          content: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: InputDecoration(
-                      labelText: context.tr('ناوی خەرجی'),
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: priceCtrl,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: const [AmountInputFormatter()],
-                    decoration: InputDecoration(
-                      labelText: '${context.tr('نرخ')} (${context.tr('د.ع')})',
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(context.tr('ڕەتکردنەوە')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(context.tr('تۆمارکردن')),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (mounted && added == true && _activeShift != null) {
-      final name = nameCtrl.text.trim();
-      final price = parseAmount(priceCtrl.text).toDouble();
-      if (name.isNotEmpty && price > 0) {
-        await ref
-            .read(localDbProvider)
-            .addCashierExpense(_activeShift!.id, name, price);
-        if (mounted) await _loadShift();
-      }
-    }
-  }
-
-  Future<void> _showReturnExpenseDialog() async {
-    if (_activeShift == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.tr('سەرەتا شەفت دەستپێبکە')),
-          backgroundColor: AppColors.danger,
-        ),
-      );
-      return;
-    }
-    final nameCtrl = TextEditingController();
-    final priceCtrl = TextEditingController();
-    final added = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => DialogControllerOwner(
-        controllers: [nameCtrl, priceCtrl],
-        child: AlertDialog(
-          title: Text(context.tr('گەڕانەوەی خەرجی')),
-          content: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: InputDecoration(
-                      labelText: context.tr('ناوی خەرجی'),
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: priceCtrl,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: const [AmountInputFormatter()],
-                    decoration: InputDecoration(
-                      labelText: '${context.tr('نرخ')} (${context.tr('د.ع')})',
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(context.tr('ڕەتکردنەوە')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(context.tr('گەڕاندنەوە')),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (mounted && added == true && _activeShift != null) {
-      final name = nameCtrl.text.trim();
-      final price = parseAmount(priceCtrl.text).toDouble();
-      if (name.isNotEmpty && price > 0) {
-        await ref
-            .read(localDbProvider)
-            .addCashierExpense(_activeShift!.id, name, -price);
-        if (mounted) await _loadShift();
-      }
-    }
+    if (mounted) await _loadShift();
   }
 
   Future<void> _toggleShift() async {
@@ -2157,7 +1892,7 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
                   context.tr('خەرجیەکان'),
                   Icons.account_balance_wallet_rounded,
                   AppColors.danger,
-                  _showExpensesSheet,
+                  _openExpensesPage,
                 ),
               ],
               const SizedBox(width: 2),

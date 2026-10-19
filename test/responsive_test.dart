@@ -44,6 +44,7 @@ import 'package:ramyar_pos/page/cashier/cashier_home_page.dart';
 import 'package:ramyar_pos/page/cashier/cashier_unified_table_page.dart';
 import 'package:ramyar_pos/page/cashier/cashier_table_page.dart';
 import 'package:ramyar_pos/page/cashier/cashier_cancelled_items_page.dart';
+import 'package:ramyar_pos/page/cashier/cashier_expenses_page.dart';
 import 'package:ramyar_pos/page/cashier/cashier_previous_orders_page.dart';
 import 'package:ramyar_pos/page/cashier/transfer_page.dart';
 import 'package:ramyar_pos/page/cashier/merge_page.dart';
@@ -393,6 +394,7 @@ void main() {
       await _visit(tester, const MergePage(sourceTableId: 1));
       await _visit(tester, const CashierTablePage(tableNumber: 1));
       await _visit(tester, const CashierCancelledItemsPage());
+      await _visit(tester, const CashierExpensesPage(shiftId: 0));
       await _visit(tester, const CashierPreviousOrdersPage(shiftId: 0));
       await _visit(
         tester,

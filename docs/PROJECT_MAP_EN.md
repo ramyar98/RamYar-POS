@@ -622,17 +622,20 @@ IQD price, icon), and choose which printers receive each item.
 
 #### D. Accounts — `lib/page/admin/admin_accounts_page.dart`
 
-**What it is:** Financial summary for a chosen date range: settled earnings,
-purchases, refunds, and the resulting gross income.
+**What it is:** Financial summary for a chosen period: net takings, electronic,
+cash+electronic and expenses.
 
 **Role:** admin only.
 
-- **Date-range tile** — opens the native date-range picker.
-- **Quick chips — “ئەمڕۆ”** *[Today]*, **“دوێنی”** *[Yesterday]*, **“7 ڕۆژ”**
-  *[7 days]*, **“30 ڕۆژ”** *[30 days]* — set the range.
-- **Summary cards — Total (کۆی گشتی)**, **Purchases (کڕینی ئەشیاکان)**,
-  **Refunds (گەڕاندنەوە)**, **Gross Income (داهاتی خاو)** —
-  all in IQD.
+- **Period chips** — **“مانگانە”** *[Monthly, the default]*,
+  **“ڕۆژانە”** *[Daily = today]*, **“دوێنی”** *[Yesterday]*,
+  **“پێری”** *[Day before yesterday]* — one day at a time, then
+  **“تایبەت”** *[Custom]* opens two date pickers (e.g. the 1st to the 30th).
+  The choice is remembered across restarts.
+- **Four cards** — **Total money (کۆی گشتی پارەکان)** = cash+electronic −
+  expenses, **Electronic (پارەی ئەلیکترۆنی)**, **Cash + electronic
+  (کاش + ئەلیکترۆنی)**, **Expenses (خەرجیەکان)** = purchases + shift
+  expenses + refunds — all in IQD.
 
 #### E. Order history — `lib/page/admin/admin_orders_page.dart`
 
@@ -676,35 +679,45 @@ and reprint any bill.
 - **Previous-orders** section with expandable cards.
 - **Rejected (cancelled)** list for open shifts with total.
 
-#### H. Purchases — `lib/page/admin/admin_purchases_page.dart`
+#### H. Expenses — `lib/page/admin/admin_purchases_page.dart`
 
-**What it is:** Log supply purchases and view the list with a grand total; feeds
-the accounts net income.
-
-**Role:** admin only.
-
-- **Item-name field** + **Price (نرخ (د.ع)) field** + **“زیادکردن”** *[Add]* button
-  — validates, saves, feeds the list.
-- **List** with per-item date and red price + **Total (کۆی گشتی)** footer.
-
-#### I. Refunds — `lib/page/admin/admin_refunds_page.dart`
-
-**What it is:** View refunded money for cancelled items in a date window.
+**What it is:** The money ledger for a period: what came in, what was drawn out
+and what was handed back — plus the form to book a purchase.
 
 **Role:** admin only.
 
-- **Start / End date tiles** — pick dates to filter.
-- **Refund rows** — item, ×qty, table, who refunded, date/time, red amount +
+- **Period chips** — هەموو *[All]* / ئەمڕۆ *[Today]* / دوێنی *[Yesterday]* /
+  پێری *[Day before yesterday]* / تایبەت *[Custom]*; remembered across restarts.
+- **Three stat cards** — **لە دەخیلە** *[Money in]* (cash + electronic + debt),
+  **ڕاکێشراوە** *[Money out]* (purchases + shift expenses),
+  **گەڕاوەتەوە** *[Returned]* (refunds) — in IQD.
+- **Add form** — **Item-name field** + **Price (نرخ (د.ع))** + **“زیادکردن”**
+  *[Add]* — validates, saves, feeds the ledger.
+- **Ledger rows** — purchase (red) or shift expense (primary) tag, date, amount,
+  plus a **Total (کۆی گشتی)** footer.
+
+#### I. Rejected (ڕەتکراوەکان) — `lib/page/admin/admin_refunds_page.dart`
+
+**What it is:** View refunded money for cancelled items (ڕەتکراوەکان) over a
+period.
+
+**Role:** admin only.
+
+- **Period chips** — هەموو *[All]* (the default) / ئەمڕۆ *[Today]* / دوێنی
+  *[Yesterday]* / پێری *[Day before yesterday]* / تایبەت *[Custom]*; remembered
+  across restarts.
+- **Rejected rows** — item, ×qty, table, who rejected it, date/time, red amount +
   **Total (کۆی گشتی)** footer.
 
 #### J. Debts (admin) — `lib/page/admin/admin_debts_page.dart`
 
-**What it is:** Track table debts in a date window; settle them as paid orders or
+**What it is:** Track table debts over a period; settle them as paid orders or
 delete them.
 
 **Role:** admin only.
 
-- **Start / End date tiles** — date filter.
+- **Period chips** — same five presets as above; the choice is remembered across
+  restarts, so the admin keeps the same day window for every table.
 - **Settle button** (green check) — confirmation (Cancel / Settle (واسڵکردن)) —
   turns the debt into a settled order.
 - **Delete button** (red trash) — confirmation (Cancel / Delete).
@@ -733,12 +746,14 @@ sales per waiter.
 
 #### M. Food demand — `lib/page/admin/admin_food_demand_page.dart`
 
-**What it is:** How many units of each food sold in a date window (cancelled
-items subtracted), most-demanded first.
+**What it is:** How many units of each food sold over a period (cancelled items
+subtracted), most-demanded first.
 
 **Role:** admin only.
 
-- **Start / End date tiles** — date filter.
+- **Period chips** — هەموو *[All]* / ئەمڕۆ *[Today, the default]* / دوێنی
+  *[Yesterday]* / پێری *[Day before yesterday]* / تایبەت *[Custom]*; remembered
+  across restarts.
 - **Rows** — food name + “{quantity} دانە” *[pieces]* badge.
 
 #### N. Food filter by printer — `lib/page/admin/admin_food_filter_page.dart`
@@ -772,6 +787,18 @@ per role (kitchen/bar/hookah/cashier), and map categories or items to printers.
 - **“نەخشەکێشانی خواردن”** *[Map items]* — per-item dropdown (default “by
   category”) — Close (داخستن).
 
+#### P. Table notes — `lib/page/admin/admin_table_notes_page.dart`
+
+**What it is:** Read the notes the captains leave on tables, newest first, with the
+note's last edit time shown on each card.
+
+**Role:** admin only.
+
+- **Period chips** — هەموو *[All, the default]* / ئەمڕۆ *[Today]* / دوێنی
+  *[Yesterday]* / پێری *[Day before yesterday]* / تایبەت *[Custom]*; remembered
+  across restarts. Notes written before edit times were recorded stay visible
+  under هەموو only.
+
 ---
 
 ## 6. Shared building blocks (widgets)
@@ -792,6 +819,12 @@ These small pieces appear inside many screens:
   bill-requested / overdue) showing name, guests, IQD total.
 - **Profile icon (`profile_icon.dart`)** — avatar + language menu (and optional
   Settings / Logout).
+- **Admin date filter bar (`admin_date_filter_bar.dart`)** — the period chip row
+  shared by accounts, expenses, rejected, debts, food demand and table notes:
+  هەموو *[All]* / ئەمڕۆ *[Today]* / دوێنی *[Yesterday]* / پێری *[Day before
+  yesterday]* / مانگانە *[Monthly]* / ئەم هەفتەیە *[This week]* / تایبەت *[Custom,
+  two date pickers]*. Each page picks the subset it needs; the choice can be
+  persisted across restarts.
 - **Currency converter (`currency_converter.dart`)** — live USD⇄IQD.
 - **Print preview dialog (`print_preview_dialog.dart`)** — **Cancel / Print**
   before any printing.
@@ -804,7 +837,7 @@ These small pieces appear inside many screens:
 
 ## 7. The database (local storage)
 
-- **Engine:** SQLite (via the `sqflite` package), file **version 30**.
+- **Engine:** SQLite (via the `sqflite` package), file **version 46**.
 - **22 tables** (the stored data):
 
 | Table | Stores |

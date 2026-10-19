@@ -5,7 +5,18 @@ import '../core/colors.dart';
 import '../services/app_localizations.dart';
 
 /// The period presets shared by the admin pages that filter rows by date.
-enum AdminDatePeriod { all, today, yesterday, week, month, custom }
+///
+/// The day presets run backwards one day at a time, as the captain reads them:
+/// [today] (ئەمڕۆ) → [yesterday] (دوێنی) → [dayBeforeYesterday] (پێری).
+enum AdminDatePeriod {
+  all,
+  today,
+  yesterday,
+  dayBeforeYesterday,
+  week,
+  month,
+  custom,
+}
 
 /// The resolved, inclusive bounds a period stands for.
 class AdminDatePeriodRange {
@@ -53,6 +64,11 @@ AdminDatePeriodRange resolveAdminDatePeriod(
     case AdminDatePeriod.yesterday:
       final y = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 1));
       return AdminDatePeriodRange(from: y, to: endOfDay(y));
+    case AdminDatePeriod.dayBeforeYesterday:
+      // «پێری» is the day before yesterday, the third day in the captain's
+      // backwards reading - not the week (that preset is [week]).
+      final p = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 2));
+      return AdminDatePeriodRange(from: p, to: endOfDay(p));
     case AdminDatePeriod.week:
       // The week runs Monday through today, mirroring the history page.
       final monday = DateTime(now.year, now.month, now.day)
@@ -203,8 +219,10 @@ class _AdminDateFilterBarState extends State<AdminDateFilterBar> {
         return context.tr('ئەمڕۆ');
       case AdminDatePeriod.yesterday:
         return context.tr('دوێنی');
-      case AdminDatePeriod.week:
+      case AdminDatePeriod.dayBeforeYesterday:
         return context.tr('پێری');
+      case AdminDatePeriod.week:
+        return context.tr('ئەم هەفتەیە');
       case AdminDatePeriod.month:
         return context.tr('مانگانە');
       case AdminDatePeriod.custom:

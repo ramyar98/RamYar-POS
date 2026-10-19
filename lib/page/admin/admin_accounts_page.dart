@@ -24,6 +24,9 @@ class _AdminAccountsPageState extends ConsumerState<AdminAccountsPage> {
   double _net = 0;
   bool _loading = false;
 
+  /// Sticky: the admin's chosen period survives reopening the page.
+  static const String _prefKey = 'admin_accounts_date_filter';
+
   late final LocalDatabase _db;
   late final VoidCallback _revisionListener;
 
@@ -100,13 +103,15 @@ class _AdminAccountsPageState extends ConsumerState<AdminAccountsPage> {
                   AdminDatePeriod.month,
                   AdminDatePeriod.today,
                   AdminDatePeriod.yesterday,
-                  AdminDatePeriod.week,
+                  AdminDatePeriod.dayBeforeYesterday,
                   AdminDatePeriod.custom,
                 ],
                 initial: AdminDatePeriod.month,
                 labels: {
                   AdminDatePeriod.today: context.tr('ڕۆژانە'),
                 },
+                persist: true,
+                prefKey: _prefKey,
                 onChanged: (period, range) {
                   setState(() => _range = range);
                   unawaited(_loadData());

@@ -160,7 +160,7 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
                 AdminDatePeriod.all,
                 AdminDatePeriod.today,
                 AdminDatePeriod.yesterday,
-                AdminDatePeriod.week,
+                AdminDatePeriod.dayBeforeYesterday,
                 AdminDatePeriod.custom,
               ],
               initial: _period,

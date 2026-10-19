@@ -83,7 +83,7 @@ class _AdminTableNotesPageState extends ConsumerState<AdminTableNotesPage> {
                 AdminDatePeriod.all,
                 AdminDatePeriod.today,
                 AdminDatePeriod.yesterday,
-                AdminDatePeriod.week,
+                AdminDatePeriod.dayBeforeYesterday,
                 AdminDatePeriod.custom,
               ],
               initial: _period,

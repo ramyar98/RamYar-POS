@@ -29,6 +29,9 @@ class _AdminPurchasesPageState extends ConsumerState<AdminPurchasesPage> {
   AdminDatePeriod _period = AdminDatePeriod.all;
   AdminDatePeriodRange _range = resolveAdminDatePeriod(AdminDatePeriod.all);
 
+  /// Sticky: the admin's chosen period survives reopening the page.
+  static const String _prefKey = 'admin_expenses_date_filter';
+
   double _moneyIn = 0;
   double _moneyOut = 0;
   double _moneyReturned = 0;
@@ -158,10 +161,12 @@ class _AdminPurchasesPageState extends ConsumerState<AdminPurchasesPage> {
                     AdminDatePeriod.all,
                     AdminDatePeriod.today,
                     AdminDatePeriod.yesterday,
-                    AdminDatePeriod.week,
+                    AdminDatePeriod.dayBeforeYesterday,
                     AdminDatePeriod.custom,
                   ],
                   initial: _period,
+                  persist: true,
+                  prefKey: _prefKey,
                   onChanged: (period, range) {
                     setState(() {
                       _period = period;

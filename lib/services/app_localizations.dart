@@ -2857,10 +2857,10 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
   },
   'پێری': {
     AppLanguage.badini: 'پێڕی',
-    AppLanguage.arabic: 'أسبوعياً',
-    AppLanguage.persian: 'هفتگی',
-    AppLanguage.english: 'Weekly',
-    AppLanguage.turkish: 'Haftalık',
+    AppLanguage.arabic: 'أول أمس',
+    AppLanguage.persian: 'پریروز',
+    AppLanguage.english: 'Day before yesterday',
+    AppLanguage.turkish: 'Evvelsi gün',
   },
   'هیچ خەرجێک نییە': {
     AppLanguage.badini: 'هیچ خەرجێک نییە',

@@ -22,6 +22,9 @@ class _AdminRefundsPageState extends ConsumerState<AdminRefundsPage> {
   AdminDatePeriodRange _range = resolveAdminDatePeriod(AdminDatePeriod.all);
   late final VoidCallback _revisionListener;
 
+  /// Sticky: the admin's chosen period survives reopening the page.
+  static const String _prefKey = 'admin_refunds_date_filter';
+
   @override
   void initState() {
     super.initState();
@@ -90,10 +93,12 @@ class _AdminRefundsPageState extends ConsumerState<AdminRefundsPage> {
                 AdminDatePeriod.all,
                 AdminDatePeriod.today,
                 AdminDatePeriod.yesterday,
-                AdminDatePeriod.week,
+                AdminDatePeriod.dayBeforeYesterday,
                 AdminDatePeriod.custom,
               ],
               initial: _period,
+              persist: true,
+              prefKey: _prefKey,
               onChanged: (period, range) {
                 setState(() {
                   _period = period;

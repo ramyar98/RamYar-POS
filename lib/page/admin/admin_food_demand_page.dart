@@ -19,6 +19,9 @@ class _AdminFoodDemandPageState extends ConsumerState<AdminFoodDemandPage> {
   List<_FoodDemand> _demands = [];
   bool _loading = false;
 
+  /// Sticky: the admin's chosen period survives reopening the page.
+  static const String _prefKey = 'admin_food_demand_date_filter';
+
   Future<void> _load() async {
     if (!mounted) return;
     setState(() => _loading = true);
@@ -86,10 +89,12 @@ class _AdminFoodDemandPageState extends ConsumerState<AdminFoodDemandPage> {
                 AdminDatePeriod.all,
                 AdminDatePeriod.today,
                 AdminDatePeriod.yesterday,
-                AdminDatePeriod.week,
+                AdminDatePeriod.dayBeforeYesterday,
                 AdminDatePeriod.custom,
               ],
               initial: _period,
+              persist: true,
+              prefKey: _prefKey,
               onChanged: (period, range) {
                 setState(() {
                   _period = period;

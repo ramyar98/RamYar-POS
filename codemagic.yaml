@@ -135,15 +135,11 @@ workflows:
         BUNDLE_ID: com.kalakchi.ramyar.pos
         XCODE_WORKSPACE: ios/Runner.xcworkspace
         XCODE_SCHEME: Runner
-    triggering:
-      events:
-      - push
-      - tag
-      branch_patterns:
-      - pattern: main
-        include: true
-        source: true
-      cancel_previous_builds: true
+    # Signed builds are started manually from the Codemagic dashboard only:
+    # they need the App Store Connect API key (ramyar_pos_key) and signing
+    # certificates configured, and must not run on every push. No events
+    # below means the workflow can only be started manually.
+    triggering: {}
     cache: *id001
     scripts:
     - *id002

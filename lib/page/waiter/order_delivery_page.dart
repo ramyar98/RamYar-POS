@@ -196,7 +196,7 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
                     child: _buildFilterBar(deliveries),
                   ),
                   SliverToBoxAdapter(
-                    child: _buildLegendRow(deliveries, rejected),
+                    child: _buildLegendRow(rejected),
                   ),
                   if (visibleDeliveries.isEmpty)
                     SliverFillRemaining(
@@ -304,44 +304,27 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
     );
   }
 
-  Widget _buildLegendRow(
-    List<OrderDeliveryModel> deliveries,
-    int rejected,
-  ) {
+  /// A compact colour key for the card status pills. Counts deliberately live
+  /// on the filter chips only, so the two rows never repeat the same numbers.
+  Widget _buildLegendRow(int rejected) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
-          _buildLegendChip(
-            _pendingYellow,
-            context.tr('نەگەیشت'),
-            _countFor(deliveries, 'not_arrived'),
-          ),
-          _buildLegendChip(
-            AppColors.blue,
-            context.tr('گەیشت'),
-            _countFor(deliveries, 'arrived'),
-          ),
-          _buildLegendChip(
-            _pendingYellow,
-            context.tr('دوبارە پرێنت'),
-            _countFor(deliveries, 'retry_print'),
-          ),
-          _buildLegendChip(
-            AppColors.success,
-            context.tr('پرێنت'),
-            _countFor(deliveries, 'printed'),
-          ),
+          _buildLegendChip(_pendingYellow, context.tr('نەگەیشت')),
+          _buildLegendChip(AppColors.blue, context.tr('گەیشت')),
+          _buildLegendChip(_pendingYellow, context.tr('دوبارە پرێنت')),
+          _buildLegendChip(AppColors.success, context.tr('پرێنت')),
           if (rejected > 0)
-            _buildLegendChip(AppColors.danger, context.tr('ڕەفز'), rejected),
+            _buildLegendChip(AppColors.danger, context.tr('ڕەفز')),
         ],
       ),
     );
   }
 
-  Widget _buildLegendChip(Color color, String label, int count) {
+  Widget _buildLegendChip(Color color, String label) {
     return Container(
       constraints: const BoxConstraints(maxWidth: double.infinity),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -360,10 +343,7 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              context.trp('{label} ({count})', {
-                'label': label,
-                'count': '$count',
-              }),
+              label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

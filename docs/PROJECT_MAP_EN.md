@@ -332,7 +332,7 @@ it is assigned to (kitchen, bar, cashier printer, hookah room)?
   Printed/Reprint = per-dish ticket state. Any dish that still owes a ticket
   appears under “Reprint”.
 - **Legend chips** — Waiting (yellow) / Arrived (blue) / Reprint (yellow) /
-  Printed (green) / Rejected (red).
+  Printed (green) / Rejected (red) (colour key only).
 - **Order cards** — “Table {n}, Sent - time”, a status badge, a per-dish
   `arrived/total` and `printed/total` summary, and one row per dish with its
   printer label, arrival icon and print icon. A dish still owing a ticket has a

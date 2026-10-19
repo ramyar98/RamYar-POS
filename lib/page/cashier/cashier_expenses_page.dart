@@ -97,14 +97,12 @@ class _CashierExpensesPageState extends ConsumerState<CashierExpensesPage>
           indicatorColor: AppColors.primary,
           indicatorWeight: 3,
           tabs: [
-            Tab(
-              icon: const Icon(Icons.money_off_csred_rounded, size: 18),
-              text: context.tr('خەرجی'),
-            ),
-            Tab(
-              icon: const Icon(Icons.replay_rounded, size: 18),
-              text: context.tr('گەڕانەوەی خەرجی'),
-            ),
+            // Text-only tabs on purpose: an icon + text Tab makes the bar 72px
+            // tall (`_kTextAndIconTabHeight`), and on the shop's landscape
+            // handset that is a third of the screen gone before a single row is
+            // drawn. The two names say it plainly.
+            Tab(text: context.tr('خەرجی')),
+            Tab(text: context.tr('گەڕانەوەی خەرجی')),
           ],
         ),
       ),
@@ -308,30 +306,26 @@ class _CashierExpensesPageState extends ConsumerState<CashierExpensesPage>
       ),
       child: Row(
         children: [
-          Icon(icon, color: accent),
-          const SizedBox(width: 10),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: accent, size: 20),
+          ),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$label (${rows.length})',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: AppColors.darkText,
-                  ),
-                ),
-                Text(
-                  context.tr('کۆی گشتی'),
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.softText,
-                  ),
-                ),
-              ],
+            child: Text(
+              '$label (${rows.length})',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: AppColors.darkText,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -343,7 +337,7 @@ class _CashierExpensesPageState extends ConsumerState<CashierExpensesPage>
                 '${context.tr('د.ع')} ${money(total)}',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  fontSize: 15,
+                  fontSize: 17,
                   color: accent,
                 ),
               ),
@@ -410,7 +404,7 @@ class _CashierExpensesPageState extends ConsumerState<CashierExpensesPage>
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          '${context.tr('کات')}: ${formatShiftTime(createdAt)}',
+                          '${context.tr('کات')}: ${formatShiftTime(context, createdAt)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -472,57 +466,96 @@ class _CashierExpensesPageState extends ConsumerState<CashierExpensesPage>
     );
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => DialogControllerOwner(
-        controllers: [nameCtrl, priceCtrl],
-        child: AlertDialog(
-          title: Text(
-            context.tr(returns ? 'گەڕانەوەی خەرجی' : 'تۆمارکردنی خەرجی'),
-          ),
-          content: SingleChildScrollView(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: _fieldDecoration(context.tr('ناوی خەرجی')),
+      builder: (ctx) {
+        // Inline field errors instead of a silent no-op: the cashier who taps
+        // Record on an empty form must be told what is missing, and the dialog
+        // must stay open so the fix costs no retyping.
+        String? nameError;
+        String? priceError;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => DialogControllerOwner(
+            controllers: [nameCtrl, priceCtrl],
+            child: AlertDialog(
+              title: Text(
+                context.tr(returns ? 'گەڕانەوەی خەرجی' : 'تۆمارکردنی خەرجی'),
+              ),
+              content: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameCtrl,
+                        textInputAction: TextInputAction.next,
+                        onChanged: (_) {
+                          if (nameError != null) {
+                            setDialogState(() => nameError = null);
+                          }
+                        },
+                        decoration: _fieldDecoration(
+                          context.tr('ناوی خەرجی'),
+                          errorText: nameError,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: priceCtrl,
+                        keyboardType: TextInputType.number,
+                        textInputAction: TextInputAction.done,
+                        inputFormatters: const [AmountInputFormatter()],
+                        onChanged: (_) {
+                          if (priceError != null) {
+                            setDialogState(() => priceError = null);
+                          }
+                        },
+                        decoration: _fieldDecoration(
+                          '${context.tr('نرخ')} (${context.tr('د.ع')})',
+                          errorText: priceError,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: priceCtrl,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: const [AmountInputFormatter()],
-                    decoration: _fieldDecoration(
-                      '${context.tr('نرخ')} (${context.tr('د.ع')})',
-                    ),
-                  ),
-                ],
+                ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(context.tr('ڕەتکردنەوە')),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final name = nameCtrl.text.trim();
+                    final price = parseAmount(priceCtrl.text);
+                    if (name.isEmpty || price <= 0) {
+                      setDialogState(() {
+                        nameError = name.isEmpty
+                            ? context.tr('پێویستە ناوی خەرجی بنووسیت')
+                            : null;
+                        priceError = price <= 0
+                            ? context.tr('پێویستە بڕ بنووسیت')
+                            : null;
+                      });
+                      return;
+                    }
+                    Navigator.pop(ctx, true);
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: returns ? AppColors.blue : _expenseAccent,
+                  ),
+                  child: Text(
+                    context.tr(returns ? 'گەڕاندنەوەی خەرجی' : 'تۆمارکردن'),
+                  ),
+                ),
+              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(context.tr('ڕەتکردنەوە')),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: FilledButton.styleFrom(
-                backgroundColor: returns ? AppColors.blue : _expenseAccent,
-              ),
-              child: Text(
-                context.tr(returns ? 'گەڕاندنەوەی خەرجی' : 'تۆمارکردن'),
-              ),
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
     if (!mounted || confirmed != true) return;
     final name = nameCtrl.text.trim();
     final price = parseAmount(priceCtrl.text).toDouble();
-    if (name.isEmpty || price <= 0) return;
     await ref
         .read(localDbProvider)
         .addCashierExpense(widget.shiftId, name, returns ? -price : price);
@@ -531,15 +564,29 @@ class _CashierExpensesPageState extends ConsumerState<CashierExpensesPage>
     if (!mounted) return;
     // A return belongs on the returns side, so show it there straight away.
     if (returns && _tab.index != 1) _tab.animateTo(1);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(returns ? 'خەرجی گەڕێنرایەوە' : 'خەرجی تۆمارکرا'),
+          ),
+          backgroundColor: returns ? AppColors.blue : AppColors.success,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
-  InputDecoration _fieldDecoration(String label) => InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: AppColors.background,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    ),
-  );
+  InputDecoration _fieldDecoration(String label, {String? errorText}) =>
+      InputDecoration(
+        labelText: label,
+        errorText: errorText,
+        filled: true,
+        fillColor: AppColors.background,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      );
 }

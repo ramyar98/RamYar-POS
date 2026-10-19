@@ -163,6 +163,7 @@ class _CashCalculatorDialogState extends State<CashCalculatorDialog> {
                           ),
                         ),
                         IconButton(
+                          tooltip: context.tr('داخستن'),
                           icon: const Icon(Icons.close_rounded),
                           onPressed: () => Navigator.pop(context),
                         ),

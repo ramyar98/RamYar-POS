@@ -19,12 +19,12 @@ class TableNotification {
 
   DateTime? get _openedDateTime => DateTime.tryParse(openedAt);
 
-  String get formattedOpenedAmPm {
+  String formattedOpenedAmPm({String am = 'AM', String pm = 'PM'}) {
     final dt = _openedDateTime;
     if (dt == null) return '';
     String two(int n) => n.toString().padLeft(2, '0');
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    final ap = dt.hour >= 12 ? 'PM' : 'AM';
+    final ap = dt.hour >= 12 ? pm : am;
     return '${two(h)}:${two(dt.minute)} $ap';
   }
 
@@ -32,7 +32,7 @@ class TableNotification {
     id: map['nid'] as int,
     tableId: map['tableId'] as int,
     tableName: map['tableName'] as String,
-    status: TableStatus.values[map['status'] as int],
+    status: tableStatusFrom(map['status']),
     totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? 0.0,
     openedAt: map['openedAt'] as String,
   );

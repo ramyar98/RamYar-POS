@@ -145,7 +145,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
     final dt = DateTime.tryParse(iso);
     if (dt == null) return iso;
     final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-    final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+    final amPm = dt.hour >= 12 ? context.tr('د.ن') : context.tr('پ.ن');
     return '${hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $amPm';
   }
 

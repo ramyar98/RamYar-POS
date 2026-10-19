@@ -14,7 +14,7 @@ class PrintPreview {
       barrierDismissible: false,
       builder: (ctx) => _PrintPreviewDialog(
         title: ctx.tr('پێشبینینی چاپ'),
-        subtitle: _typeLabel(job.printerType),
+        subtitle: _typeLabel(ctx, job.printerType),
         sections: [
           _PreviewSection(
             label: ctx.tr('مێز و کات'),
@@ -62,7 +62,7 @@ class PrintPreview {
                 (job) => [
                   _PreviewSection(
                     label:
-                        '${_typeLabel(job.printerType)} — ${job.printerName}',
+                        '${_typeLabel(ctx, job.printerType)} — ${job.printerName}',
                     lines: job.items
                         .map((item) => 'x${item.quantity} ${item.name}')
                         .toList(),
@@ -161,16 +161,16 @@ class PrintPreview {
         '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
-  static String _typeLabel(PrinterType type) {
+  static String _typeLabel(BuildContext context, PrinterType type) {
     switch (type) {
       case PrinterType.kitchen:
-        return 'Kitchen';
+        return context.tr('مەتبەخ');
       case PrinterType.bar:
-        return 'Bar';
+        return context.tr('باڕ');
       case PrinterType.hookah:
-        return 'Hookah';
+        return context.tr('نێرگیلە');
       case PrinterType.cashier:
-        return 'Cashier';
+        return context.tr('کاشێر');
     }
   }
 }
@@ -260,7 +260,10 @@ class _PrintPreviewDialog extends StatelessWidget {
                     const SizedBox(height: 8),
                     ...section.lines.map(
                       (line) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6, left: 12),
+                        padding: const EdgeInsetsDirectional.only(
+                          start: 12,
+                          bottom: 6,
+                        ),
                         child: Text(
                           line,
                           maxLines: 2,

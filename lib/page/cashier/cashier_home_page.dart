@@ -284,7 +284,7 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
     final dt = DateTime.tryParse(iso);
     if (dt == null) return iso;
     final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-    final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+    final amPm = dt.hour >= 12 ? context.tr('د.ن') : context.tr('پ.ن');
     return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')} '
         '${hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $amPm';
   }
@@ -361,6 +361,7 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
                     ),
                   ),
                   IconButton(
+                    tooltip: context.tr('داخستن'),
                     icon: const Icon(Icons.close_rounded),
                     onPressed: () => Navigator.pop(ctx),
                   ),
@@ -954,7 +955,7 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '${n.formattedOpenedAmPm}  ·  ${_statusText(n.status)}',
+                                        '${n.formattedOpenedAmPm(am: context.tr('پ.ن'), pm: context.tr('د.ن'))}  ·  ${_statusText(n.status)}',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
@@ -1710,9 +1711,9 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
       );
     }
     final shift = _activeShift!;
-    final started = shift.startedAt;
-    final date = started.substring(0, 10);
-    final time = started.substring(11, 19);
+    // Parsed through `_formatTime`, not sliced: `substring(0, 10)` throws a
+    // RangeError on any stored value shorter than 19 chars.
+    final started = _formatTime(shift.startedAt);
     return Material(
       color: AppColors.success.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(10),
@@ -1737,7 +1738,7 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
                     ),
                   ),
                   Text(
-                    '$date $time',
+                    started,
                     style: TextStyle(
                       fontSize: 10,
                       color: AppColors.success.withValues(alpha: 0.7),

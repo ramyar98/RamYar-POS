@@ -198,6 +198,29 @@ void main() {
     await finish(tester);
   });
 
+  testWidgets('the dialog refuses an empty form and says why', (tester) async {
+    await openCashierHome(tester, laptop);
+    await openExpensesPage(tester);
+    await openLedgerDialog(tester, returns: false);
+
+    // Tap Record with both fields empty: the dialog must stay open and each
+    // field must explain what is missing, instead of closing on a silent no-op.
+    await tester.tap(inDialog(find.text('تۆمارکردن')).first,
+        warnIfMissed: false);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(inDialog(find.text('پێویستە ناوی خەرجی بنووسیت')), findsOneWidget);
+    expect(inDialog(find.text('پێویستە بڕ بنووسیت')), findsOneWidget);
+
+    // Filling the name clears its error; the amount error stays put.
+    await tester.enterText(inDialog(find.byType(TextField)).first, 'کارەبا');
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(inDialog(find.text('پێویستە ناوی خەرجی بنووسیت')), findsNothing);
+    expect(inDialog(find.text('پێویستە بڕ بنووسیت')), findsOneWidget);
+
+    await finish(tester);
+  });
+
   testWidgets('cashier returns 20,000 with the replay button', (tester) async {
     final shiftId = await openCashierHome(tester, laptop);
 

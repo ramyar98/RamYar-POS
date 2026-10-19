@@ -52,7 +52,7 @@ class _AdminTableNotesPageState extends ConsumerState<AdminTableNotesPage> {
     if (dt == null) return '';
     String two(int n) => n.toString().padLeft(2, '0');
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    final ap = dt.hour >= 12 ? 'PM' : 'AM';
+    final ap = dt.hour >= 12 ? context.tr('د.ن') : context.tr('پ.ن');
     return '${two(dt.year)}/${two(dt.month)}/${two(dt.day)} '
         '${two(h)}:${two(dt.minute)} $ap';
   }

@@ -89,16 +89,33 @@ IconData paymentMethodIcon(String method) {
   }
 }
 
-/// «2026/10/12 08:34 PM» for a stored ISO timestamp; falls back to the raw
+/// «2026/10/12 08:34 د.ن» for a stored ISO timestamp; falls back to the raw
 /// value when it cannot be parsed.
-String formatShiftTime(String iso) {
+///
+/// The meridiem marker is localised («پ.ن» / «د.ن») instead of the English
+/// AM/PM a hard-coded literal would print on a Kurdish or Arabic till.
+String formatShiftTime(BuildContext context, String iso) {
   if (iso.isEmpty) return '-';
   final dt = DateTime.tryParse(iso);
   if (dt == null) return iso;
   final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-  final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+  final amPm = dt.hour >= 12 ? context.tr('د.ن') : context.tr('پ.ن');
   return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/'
       '${dt.day.toString().padLeft(2, '0')} '
       '${hour.toString().padLeft(2, '0')}:'
       '${dt.minute.toString().padLeft(2, '0')} $amPm';
+}
+
+/// «2026/10/12» for a stored ISO timestamp; falls back to the raw value when it
+/// cannot be parsed.
+///
+/// Prefer this over `iso.substring(0, 10)`, which throws a RangeError on any
+/// stored value shorter than 10 chars (empty strings, legacy or hand-edited
+/// rows), and over printing the raw ISO string with its `T` separator.
+String formatIsoDate(String iso) {
+  if (iso.isEmpty) return '-';
+  final dt = DateTime.tryParse(iso);
+  if (dt == null) return iso;
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${dt.year}/${two(dt.month)}/${two(dt.day)}';
 }

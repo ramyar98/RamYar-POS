@@ -99,7 +99,6 @@ lib/                                          (٦٢ فایل dart)
 │   │   ├── cashier_welcome_page.dart          (٣٥٠) دەستپێکی شەفت (shift)
 │   │   ├── cashier_home_page.dart             (١٥٠٨) ✳️ هەموو مێزەکان + tabs + حیسابەکان
 │   │   ├── cashier_unified_table_page.dart    (١٩٦٧) ✳️ پەڕەی سەرەکی مێز (حیساب+discount+گواستنەوە+settle)
-│   │   ├── cashier_table_page.dart            (٦٩٧) حیسابی مێز (پارەدان+گۆڕینەوەی نرخ)
 │   │   ├── cashier_cancelled_items_page.dart  (٢٩٦) ڕەتکراوەکان + گەڕاندنەوە بۆ مێز
 │   │   ├── transfer_page.dart                 (٢٩٦) گواستنەوەی تەواوی مێز
 │   │   └── merge_page.dart                    (٣٨١) تێکەڵکردنی ٢ مێز (٣ هەنگاو)
@@ -454,10 +453,6 @@ Seed: ٤١ خواردن بە نرخەکانیان (بەرگەری گۆشتی ٥�
   - **گواستنەوە**: `transfer_page` بۆ گواستنەوەی تەواو، `merge_page` بۆ تێکەڵکردن.
   - نووسینی **ئەنتەر وەکقەرز**، وە **میوانльное.
 - هاوکات هۆک وەک: `bottom_sheet`ی کاش ایەر یان card pay (بۆ payment).
-
-**`cashier_table_page.dart`** (٦٩٧): مۆدێلێکی جێگیری مێز (عەقلی):
-- کۆی گشتی + discount + währung گۆرکن (USD/IQD toggle).
-- دوگمە: **«چاپی receipt»**، **«قەرز»**، **«گواستنەوە بۆ مێزی تر»**، **«سڕینەوە/دووبارە»**. **کاش ئامیۆنت** بۆ settlement.
 
 **`cashier_cancelled_items_page.dart`** (٢٩٦): لیستی ڕەتکراوەکان (tab مێژوو) — هەر ڕۆ: «**گواستنەوە بۆ مێز**» (گەڕاندنەوە بۆ ئۆردەر)، نمایشی `shiftId`/cancelledBy/status. کۆی گشتی ڕەتکراوەکان.
 

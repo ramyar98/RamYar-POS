@@ -182,7 +182,10 @@ class TableCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            table.formattedSeatedTimeAmPm,
+                            table.formattedSeatedTimeAmPm(
+                              am: context.tr('پ.ن'),
+                              pm: context.tr('د.ن'),
+                            ),
                             overflow: TextOverflow.ellipsis,
                             maxLines: 1,
                             style: TextStyle(

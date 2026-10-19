@@ -225,13 +225,13 @@ class ShiftRejectedItemsViewState
                 _fact(
                   Icons.add_circle_outline_rounded,
                   '${context.tr('کاتی داواکردن')}: '
-                  '${formatShiftTime(item.requestedAt)}',
+                  '${formatShiftTime(context, item.requestedAt)}',
                   AppColors.primary,
                 ),
               _fact(
                 Icons.block_rounded,
                 '${context.tr('کاتی ڕەتکردنەوە')}: '
-                '${formatShiftTime(item.cancelledAt)}',
+                '${formatShiftTime(context, item.cancelledAt)}',
                 AppColors.danger,
               ),
               if (item.requestedByName.isNotEmpty)
@@ -302,7 +302,7 @@ class ShiftRejectedItemsViewState
             _detailLine(
               Icons.restore_rounded,
               '${context.tr('گەڕێنراوەتەوە')}: '
-              '${formatShiftTime(item.servedAt)}',
+              '${formatShiftTime(context, item.servedAt)}',
               AppColors.success,
             ),
         ],

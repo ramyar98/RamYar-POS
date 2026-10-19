@@ -401,7 +401,9 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
       child: TextField(
         controller: controller,
         maxLines: maxLines,
-        textAlign: TextAlign.right,
+        // `start`, not `right`: with a fixed right alignment the field's text
+        // hung off the wrong edge in English and Turkish.
+        textAlign: TextAlign.start,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),

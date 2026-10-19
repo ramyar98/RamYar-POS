@@ -22,7 +22,7 @@ class _AdminShiftsPageState extends ConsumerState<AdminShiftsPage> {
     final dt = DateTime.tryParse(iso);
     if (dt == null) return iso;
     final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-    final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+    final amPm = dt.hour >= 12 ? context.tr('د.ن') : context.tr('پ.ن');
     return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')} '
         '${hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $amPm';
   }
@@ -248,53 +248,63 @@ class _ComparisonIndicator extends ConsumerWidget {
             color: color.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
+          // Two short lines instead of one long row: cashier + system totals
+          // side by side needed ~420px, so on a 320px phone the difference
+          // badge was clipped off the edge entirely.
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(icon, size: 18, color: color),
-              const SizedBox(width: 8),
-              Text(
-                context.tr('کاشێر'),
-                style: TextStyle(fontSize: 12, color: AppColors.softText),
+              Row(
+                children: [
+                  Icon(icon, size: 18, color: color),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${context.tr('کاشێر')}: ${context.tr('د.ع')} ${money(shift.totalCollected)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: AppColors.darkText,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 4),
-              Text(
-                '${context.tr('د.ع')} ${money(shift.totalCollected)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: AppColors.darkText,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.compare_arrows_rounded,
-                size: 14,
-                color: AppColors.softText,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                context.tr('سیستەم'),
-                style: TextStyle(fontSize: 12, color: AppColors.softText),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '${context.tr('د.ع')} ${money(systemTotal)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: AppColors.darkText,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                diff == 0
-                    ? '='
-                    : (diff > 0 ? '+${money(diff)}' : money(diff)),
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: color,
-                ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.compare_arrows_rounded,
+                    size: 14,
+                    color: AppColors.softText,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${context.tr('سیستەم')}: ${context.tr('د.ع')} ${money(systemTotal)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: AppColors.darkText,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    diff == 0
+                        ? '='
+                        : (diff > 0 ? '+${money(diff)}' : money(diff)),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: color,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

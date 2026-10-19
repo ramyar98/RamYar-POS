@@ -706,6 +706,34 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.english: 'Total returned',
     AppLanguage.turkish: 'Toplam iade',
   },
+  'خەرجی تۆمارکرا': {
+    AppLanguage.badini: 'خەرجی هاتە تۆمارکرن',
+    AppLanguage.arabic: 'تم تسجيل المصروف',
+    AppLanguage.persian: 'هزینه ثبت شد',
+    AppLanguage.english: 'Expense recorded',
+    AppLanguage.turkish: 'Gider kaydedildi',
+  },
+  'خەرجی گەڕێنرایەوە': {
+    AppLanguage.badini: 'خەرجی هاتە گەڕاندن',
+    AppLanguage.arabic: 'تم إرجاع المصروف',
+    AppLanguage.persian: 'هزینه بازگردانده شد',
+    AppLanguage.english: 'Expense returned',
+    AppLanguage.turkish: 'Gider iade edildi',
+  },
+  'پێویستە ناوی خەرجی بنووسیت': {
+    AppLanguage.badini: 'پێدڤییە ناڤێ خەرجی بنڤیسی',
+    AppLanguage.arabic: 'يجب كتابة اسم المصروف',
+    AppLanguage.persian: 'نام هزینه الزامی است',
+    AppLanguage.english: 'Expense name is required',
+    AppLanguage.turkish: 'Gider adı gerekli',
+  },
+  'پێویستە بڕ بنووسیت': {
+    AppLanguage.badini: 'پێدڤییە بری بنڤیسی',
+    AppLanguage.arabic: 'يجب إدخال المبلغ',
+    AppLanguage.persian: 'مبلغ الزامی است',
+    AppLanguage.english: 'Amount is required',
+    AppLanguage.turkish: 'Tutar gerekli',
+  },
 
   // ===== Payment =====
   'د.ع': {
@@ -1114,6 +1142,13 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.persian: 'افزودن',
     AppLanguage.english: 'Add',
     AppLanguage.turkish: 'Ekle',
+  },
+  'کەمکردن': {
+    AppLanguage.badini: 'کێمکرن',
+    AppLanguage.arabic: 'تقليل',
+    AppLanguage.persian: 'کاهش',
+    AppLanguage.english: 'Decrease',
+    AppLanguage.turkish: 'Azalt',
   },
 
   // ===== Connect IP =====
@@ -2997,6 +3032,20 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.persian: 'زمان نشستن',
     AppLanguage.english: 'Seating time',
     AppLanguage.turkish: 'Oturma zamanı',
+  },
+  'پ.ن': {
+    AppLanguage.badini: 'پ.ن',
+    AppLanguage.arabic: 'ص',
+    AppLanguage.persian: 'ق.ظ',
+    AppLanguage.english: 'AM',
+    AppLanguage.turkish: 'ÖÖ',
+  },
+  'د.ن': {
+    AppLanguage.badini: 'د.ن',
+    AppLanguage.arabic: 'م',
+    AppLanguage.persian: 'ب.ظ',
+    AppLanguage.english: 'PM',
+    AppLanguage.turkish: 'ÖS',
   },
 
   // ===== Payment =====

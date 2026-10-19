@@ -136,7 +136,7 @@ lib/
     ├── waiter/    waiter_home_page, table_page, order_page, order_delivery_page,
     │              waiter_settings_page
     ├── cashier/   cashier_welcome_page, cashier_home_page,
-    │              cashier_unified_table_page, cashier_table_page,
+    │              cashier_unified_table_page,
     │              cashier_cancelled_items_page, transfer_page, merge_page
     └── admin/     admin_home_page, admin_user_management_page (alias admin_users_page),
                    admin_menu_page, admin_accounts_page, admin_orders_page,
@@ -517,22 +517,7 @@ kitchen/bar/hookah printers. Locks the table while open.
   - **“ناردن”** *[Send]* — sends the order (occupies the table, prints per the
     print setting via preview dialog).
 
-#### D. Cashier table (bill only, legacy) — `lib/page/cashier/cashier_table_page.dart`
-
-**What it is:** A bill/payment-only version of the table screen.
-**Note:** currently **not linked** in navigation — the Unified table screen
-replaced it.
-**Role:** cashier only (intended).
-
-- Item rows with **transfer** and **delete** buttons.
-- **Discount field** with live totals.
-- **USD⇄IQD converter**.
-- **“پارە (کاش)”** *[Cash]* — settles directly; **“کارت”** *[Card]* — settles
-  directly; **“چاپ”** *[Print]* — receipt preview (Cancel / Print); **“قەرز”**
-  *[Debt]* — moves to debts; **“گواستنەوەی هەموو”** *[Transfer everything]* —
-  opens Transfer; **“سڕینەوەی مێز”** *[Delete table]* — deletes the table.
-
-#### E. Cancelled items (cashier) — `lib/page/cashier/cashier_cancelled_items_page.dart`
+#### D. Cancelled items (cashier) — `lib/page/cashier/cashier_cancelled_items_page.dart`
 
 **What it is:** Lists food items that waiters cancelled, so the cashier can
 review and move them to another table.
@@ -547,7 +532,7 @@ review and move them to another table.
   guest if empty) and shows a green snackbar; with no tables, a red “no table to
   move to” snackbar.
 
-#### F. Transfer tables (cashier + waiter) — `lib/page/cashier/transfer_page.dart`
+#### E. Transfer tables (cashier + waiter) — `lib/page/cashier/transfer_page.dart`
 
 **What it is:** Move a table's **entire** order onto another table (empty or
 occupied). Used by both cashiers and waiters.
@@ -562,7 +547,7 @@ occupied). Used by both cashiers and waiters.
   mode, first tap selects an occupied source (highlighted), next taps move it.
 - (When opened without a source, a **remove** button clears the selection.)
 
-#### G. Merge tables (legacy) — `lib/page/cashier/merge_page.dart`
+#### F. Merge tables (legacy) — `lib/page/cashier/merge_page.dart`
 
 **What it is:** Combine two tables' items into one, in a 3-step guided flow
 (Source → Target → Confirm) with a combined-total preview.

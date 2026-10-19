@@ -73,7 +73,7 @@ class _ShiftPaymentMethodPageState
               (o) => _PaymentOrderTile(
                 order: o,
                 color: color,
-                formatTime: formatShiftTime,
+                formatTime: (iso) => formatShiftTime(context, iso),
               ),
             ),
         ],

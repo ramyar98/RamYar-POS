@@ -70,7 +70,9 @@ class _CloseShiftDialogState extends State<CloseShiftDialog> {
           children: [
             Text(
               context.trp('شەفت دەستی پێکردووە لە {time}', {
-                'time': widget.startedAt.substring(11, 19),
+                // Parsed, not sliced: `substring(11, 19)` throws a RangeError
+                // on any stored value shorter than 19 chars.
+                'time': _hhmm(widget.startedAt),
               }),
             ),
             const SizedBox(height: 12),
@@ -169,5 +171,13 @@ class _CloseShiftDialogState extends State<CloseShiftDialog> {
         ),
       ],
     );
+  }
+
+  /// «08:34» for a stored ISO timestamp; the raw value when it cannot be parsed.
+  String _hhmm(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    return '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')}';
   }
 }

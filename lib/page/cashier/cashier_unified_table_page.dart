@@ -81,6 +81,13 @@ class _CashierUnifiedTablePageState
   final List<OrderItem> _pendingItems = [];
   bool _printEnabled = true;
 
+  /// True while `_sendPendingItems` is writing to the database.
+  ///
+  /// The send buttons are only gated on `_pendingItems.isEmpty`, which does not
+  /// change until the awaited batch write returns - so without this guard a
+  /// fast double-tap sends the same dishes twice and duplicates the bill lines.
+  bool _sendingPendingItems = false;
+
   final _discountController = TextEditingController();
 
   _DiscountMode _discountMode = _DiscountMode.percent;
@@ -121,22 +128,32 @@ class _CashierUnifiedTablePageState
   Widget _buildDiscountModeToggle() {
     Widget chip(_DiscountMode mode, String label) {
       final selected = _discountMode == mode;
-      return GestureDetector(
-        onTap: () => _setDiscountMode(mode),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: selected ? Colors.white : AppColors.darkText,
+      return Semantics(
+        button: true,
+        selected: selected,
+        child: GestureDetector(
+          onTap: () => _setDiscountMode(mode),
+          // The visible pill stays compact, but the touch area around it is
+          // padded out to ~44px: at its old 22px a thumb aiming at "%" or
+          // "د.ع" regularly hit the field behind it instead.
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 9),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: selected ? AppColors.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: selected ? Colors.white : AppColors.darkText,
+                ),
+              ),
             ),
           ),
         ),
@@ -307,31 +324,37 @@ class _CashierUnifiedTablePageState
   }
 
   Future<void> _sendPendingItems() async {
-    final notifier = ref.read(waiterProvider.notifier);
-    final user = ref.read(authProvider);
-    await notifier.batchSendAndOccupy(
-      widget.tableNumber,
-      _pendingItems,
-      guestCount: widget.initialGuestCount,
-      waiterId: user?.id.toString() ?? '',
-    );
-    if (!mounted) return;
-    if (_printEnabled) {
-      final printerState = ref.read(printerProvider);
-      final router = PrintRouter(printerState);
-      final userName = user?.name ?? '';
-      final jobs = router.routeOrder(
+    if (_sendingPendingItems || _pendingItems.isEmpty) return;
+    setState(() => _sendingPendingItems = true);
+    try {
+      final notifier = ref.read(waiterProvider.notifier);
+      final user = ref.read(authProvider);
+      await notifier.batchSendAndOccupy(
+        widget.tableNumber,
         _pendingItems,
-        waiterName: userName,
-        tableNumber: widget.tableNumber,
-        tableLabel: _printLabel(null),
+        guestCount: widget.initialGuestCount,
+        waiterId: user?.id.toString() ?? '',
       );
-      if (jobs.isNotEmpty) {
-        unawaited(dispatchOrderPrintJobs(ref.read(localDbProvider), jobs,
-            tableId: widget.tableNumber));
+      if (!mounted) return;
+      if (_printEnabled) {
+        final printerState = ref.read(printerProvider);
+        final router = PrintRouter(printerState);
+        final userName = user?.name ?? '';
+        final jobs = router.routeOrder(
+          _pendingItems,
+          waiterName: userName,
+          tableNumber: widget.tableNumber,
+          tableLabel: _printLabel(null),
+        );
+        if (jobs.isNotEmpty) {
+          unawaited(dispatchOrderPrintJobs(ref.read(localDbProvider), jobs,
+              tableId: widget.tableNumber));
+        }
       }
+      setState(() => _pendingItems.clear());
+    } finally {
+      if (mounted) setState(() => _sendingPendingItems = false);
     }
-    setState(() => _pendingItems.clear());
   }
 
   Future<void> _showRenameDialog() async {
@@ -440,7 +463,12 @@ class _CashierUnifiedTablePageState
             const SizedBox(height: 10),
             _tableInfoRow(
               ctx.tr('کاتی دانیشتن'),
-              hasSeatedTime ? table.formattedSeatedTimeAmPm : '-',
+              hasSeatedTime
+                  ? table.formattedSeatedTimeAmPm(
+                      am: ctx.tr('پ.ن'),
+                      pm: ctx.tr('د.ن'),
+                    )
+                  : '-',
               AppColors.darkText,
             ),
             const SizedBox(height: 10),
@@ -461,7 +489,10 @@ class _CashierUnifiedTablePageState
               const SizedBox(height: 10),
               _tableInfoRow(
                 ctx.tr('کاتی داواکردنی حیساب'),
-                table.formattedPrintedTimeAmPm,
+                table.formattedPrintedTimeAmPm(
+                  am: ctx.tr('پ.ن'),
+                  pm: ctx.tr('د.ن'),
+                ),
                 AppColors.blue,
               ),
             ],
@@ -1093,7 +1124,9 @@ class _CashierUnifiedTablePageState
             ),
             const SizedBox(width: 8),
             FilledButton(
-              onPressed: hasPending ? _sendPendingItems : null,
+              onPressed: hasPending && !_sendingPendingItems
+                  ? _sendPendingItems
+                  : null,
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 disabledBackgroundColor: AppColors.borderSide,
@@ -1272,7 +1305,7 @@ class _CashierUnifiedTablePageState
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _pendingItems.isEmpty
+              onPressed: _pendingItems.isEmpty || _sendingPendingItems
                   ? null
                   : () async {
                       await _sendPendingItems();
@@ -1365,6 +1398,7 @@ class _CashierUnifiedTablePageState
                         ),
                       ),
                       IconButton(
+                        tooltip: context.tr('داخستن'),
                         icon: const Icon(Icons.close_rounded),
                         onPressed: () => Navigator.pop(context),
                       ),
@@ -1597,7 +1631,7 @@ class _CashierUnifiedTablePageState
               _buildPhoneCartBar(
                 grandTotal: grandTotal,
                 totalItems: totalItems,
-                hasPending: _pendingItems.isNotEmpty,
+                hasPending: _pendingItems.isNotEmpty && !_sendingPendingItems,
               ),
             ],
           );
@@ -2118,7 +2152,8 @@ class _CashierUnifiedTablePageState
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton.icon(
-                            onPressed: _pendingItems.isEmpty
+                            onPressed:
+                                _pendingItems.isEmpty || _sendingPendingItems
                                 ? null
                                 : _sendPendingItems,
                             icon: const Icon(Icons.send_rounded, size: 18),
@@ -2391,7 +2426,10 @@ class _CashierUnifiedTablePageState
                               'میوان: {guestCount} کەس • کاتی دانیشتن: {seatedTime}',
                               {
                                 'guestCount': table.guestCount.toString(),
-                                'seatedTime': table.seatedTimeDisplay,
+                                'seatedTime': table.seatedTimeDisplay(
+                                  am: context.tr('پ.ن'),
+                                  pm: context.tr('د.ن'),
+                                ),
                               },
                             ),
                             maxLines: 1,

@@ -1,5 +1,19 @@
 enum TableStatus { empty, occupied, billRequested, overdue }
 
+/// Reads a stored table status without ever throwing.
+///
+/// `TableStatus.values[raw]` throws a RangeError on any value the enum does not
+/// have: a row written by a newer build, a hand-edited database, or a NULL that
+/// slipped past the `?? 0`. An unreadable status must not take the whole floor
+/// down, so it degrades to [TableStatus.empty].
+TableStatus tableStatusFrom(Object? raw) {
+  final index = raw is int ? raw : int.tryParse('${raw ?? ''}');
+  if (index == null || index < 0 || index >= TableStatus.values.length) {
+    return TableStatus.empty;
+  }
+  return TableStatus.values[index];
+}
+
 class TableModel {
   final int id;
   final String name;
@@ -63,12 +77,12 @@ class TableModel {
     return '${dt.year}/${two(dt.month)}/${two(dt.day)}';
   }
 
-  String get formattedSeatedTimeAmPm {
+  String formattedSeatedTimeAmPm({String am = 'AM', String pm = 'PM'}) {
     final dt = _seatedDateTime();
     if (dt == null) return '';
     String two(int n) => n.toString().padLeft(2, '0');
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    final ap = dt.hour >= 12 ? 'PM' : 'AM';
+    final ap = dt.hour >= 12 ? pm : am;
     return '${two(h)}:${two(dt.minute)} $ap';
   }
 
@@ -79,18 +93,18 @@ class TableModel {
   /// while the floor card two taps away said `03:26 PM`, which is both ugly and
   /// a giveaway that the number is machine output rather than something the
   /// shop wrote.
-  String get seatedTimeDisplay {
-    final formatted = formattedSeatedTimeAmPm;
+  String seatedTimeDisplay({String am = 'AM', String pm = 'PM'}) {
+    final formatted = formattedSeatedTimeAmPm(am: am, pm: pm);
     return formatted.isEmpty ? '-' : formatted;
   }
 
-  String get formattedPrintedTimeAmPm {
+  String formattedPrintedTimeAmPm({String am = 'AM', String pm = 'PM'}) {
     if (printedAt.isEmpty) return '';
     final dt = DateTime.tryParse(printedAt);
     if (dt == null) return '';
     String two(int n) => n.toString().padLeft(2, '0');
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-    final ap = dt.hour >= 12 ? 'PM' : 'AM';
+    final ap = dt.hour >= 12 ? pm : am;
     return '${two(h)}:${two(dt.minute)} $ap';
   }
 
@@ -141,7 +155,7 @@ class TableModel {
   factory TableModel.fromMap(Map<String, dynamic> map) => TableModel(
     id: map['id'] as int,
     name: map['name'] as String,
-    status: TableStatus.values[map['status'] as int? ?? 0],
+    status: tableStatusFrom(map['status']),
     seatedTime: map['seatedTime'] as String? ?? '',
     waiterId: map['waiterId'] as String? ?? '',
     totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? 0.0,

@@ -29,6 +29,13 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
   String _dateString = '';
   Timer? _timer;
 
+  /// True while a start/end-shift write is in flight.
+  ///
+  /// The buttons stay tappable during the `await`, so without this a fast
+  /// double-tap would insert two `cashier_shifts` rows (or open two
+  /// close-shift dialogs) for a single press.
+  bool _shiftBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -41,6 +48,16 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  /// «08:34» for a stored ISO timestamp.
+  ///
+  /// Parsed rather than sliced: `substring(11, 19)` throws a RangeError on any
+  /// stored value shorter than 19 chars.
+  String _hhmm(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   void _updateTime() {
@@ -70,37 +87,48 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
   }
 
   Future<void> _startShift() async {
+    if (_shiftBusy) return;
     final user = ref.read(authProvider);
     if (user == null) return;
+    setState(() => _shiftBusy = true);
     final db = ref.read(localDbProvider);
-    await db.startShift(CashierShift(
-      cashierId: user.id,
-      cashierName: user.name,
-      startedAt: DateTime.now().toIso8601String(),
-    ));
-    if (!mounted) return;
-    await ref.read(waiterProvider.notifier).refresh();
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const CashierHomePage()),
-    );
+    try {
+      await db.startShift(CashierShift(
+        cashierId: user.id,
+        cashierName: user.name,
+        startedAt: DateTime.now().toIso8601String(),
+      ));
+      if (!mounted) return;
+      await ref.read(waiterProvider.notifier).refresh();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const CashierHomePage()),
+      );
+    } finally {
+      if (mounted) setState(() => _shiftBusy = false);
+    }
   }
 
   Future<void> _endShift() async {
-    if (_activeShift == null) return;
+    if (_shiftBusy || _activeShift == null) return;
     final db = ref.read(localDbProvider);
     final shiftExpenses = await db.getShiftExpensesTotal(_activeShift!.id);
     if (!mounted) return;
-    final result = await showDialog<CloseShiftResult>(
-      context: context,
-      builder: (_) => CloseShiftDialog(
-        startedAt: _activeShift!.startedAt,
-        shiftExpenses: shiftExpenses,
-      ),
-    );
-    if (result != null && mounted) {
-      await db.endShift(_activeShift!.id, DateTime.now().toIso8601String(), result.collected);
-      await _loadShift();
+    setState(() => _shiftBusy = true);
+    try {
+      final result = await showDialog<CloseShiftResult>(
+        context: context,
+        builder: (_) => CloseShiftDialog(
+          startedAt: _activeShift!.startedAt,
+          shiftExpenses: shiftExpenses,
+        ),
+      );
+      if (result != null && mounted) {
+        await db.endShift(_activeShift!.id, DateTime.now().toIso8601String(), result.collected);
+        await _loadShift();
+      }
+    } finally {
+      if (mounted) setState(() => _shiftBusy = false);
     }
   }
 
@@ -218,6 +246,7 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
                       icon: Icons.play_arrow_rounded,
                       label: context.tr('دەستپێکردنی شەفت'),
                       onPressed: _startShift,
+                      enabled: !_shiftBusy,
                     ),
                     ],
                     const SizedBox(height: 10),
@@ -269,7 +298,7 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
           const SizedBox(height: 4),
           Text(context.trp('دەستی پێکردووە لە {time}',
-              {'time': _activeShift!.startedAt.substring(11, 19)}),
+              {'time': _hhmm(_activeShift!.startedAt)}),
               style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.7))),
           const SizedBox(height: 14),
           Row(
@@ -284,6 +313,7 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
                       MaterialPageRoute(builder: (_) => const CashierHomePage()),
                     );
                   },
+                  enabled: !_shiftBusy,
                 ),
               ),
               const SizedBox(width: 10),
@@ -291,7 +321,7 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
                 child: SizedBox(
                   height: 44,
                   child: OutlinedButton.icon(
-                    onPressed: _endShift,
+                    onPressed: _shiftBusy ? null : _endShift,
                     icon: const Icon(Icons.stop_rounded, color: AppColors.danger, size: 18),
                     label: FittedBox(
                       fit: BoxFit.scaleDown,
@@ -314,8 +344,10 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
     );
   }
 
-  Widget _buildGradientButton({required IconData icon, required String label, required VoidCallback onPressed, double? height}) {
-    return Container(
+  Widget _buildGradientButton({required IconData icon, required String label, required VoidCallback onPressed, double? height, bool enabled = true}) {
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: Container(
       height: height,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -333,7 +365,7 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onPressed,
+          onTap: enabled ? onPressed : null,
           borderRadius: BorderRadius.circular(14),
           child: Padding(
             padding: EdgeInsets.symmetric(vertical: height != null ? 0 : 14, horizontal: 16),
@@ -355,6 +387,7 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
           ),
         ),
       ),
+    ),
     );
   }
 

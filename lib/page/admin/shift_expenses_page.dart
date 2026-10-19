@@ -246,7 +246,7 @@ class ShiftExpensesViewState extends ConsumerState<ShiftExpensesView> {
                       const SizedBox(width: 4),
                       Flexible(
                         child: Text(
-                          '${context.tr('کات')}: ${formatShiftTime(createdAt)}',
+                          '${context.tr('کات')}: ${formatShiftTime(context, createdAt)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

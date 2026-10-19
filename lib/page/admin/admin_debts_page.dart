@@ -25,6 +25,9 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
   /// Sticky: the admin's chosen period survives reopening the page.
   static const String _prefKey = 'admin_debts_date_filter';
 
+  /// Debt ids whose settle write is currently in flight.
+  final Set<int> _settlingIds = <int>{};
+
   @override
   void initState() {
     super.initState();
@@ -77,31 +80,36 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
     }
   }
 
-  void _settleDebt(DebtModel debt) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('واسڵکردنی قەرز')),
-        content: Text(
-          context.trp(
-            'دڵنیایت دەتەوێت قەرزی {name} - د.ع {amount} واسڵ بکەیت؟',
-            {'name': debt.tableName, 'amount': money(debt.amount)},
+  Future<void> _settleDebt(DebtModel debt) async {
+    // One settle per debt at a time: the row stays tappable while the insert is
+    // in flight, and a second pass would write the debt into `settled_orders`
+    // twice before `deleteDebt` lands.
+    if (_settlingIds.contains(debt.id)) return;
+    _settlingIds.add(debt.id);
+    try {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(context.tr('واسڵکردنی قەرز')),
+          content: Text(
+            context.trp(
+              'دڵنیایت دەتەوێت قەرزی {name} - د.ع {amount} واسڵ بکەیت؟',
+              {'name': debt.tableName, 'amount': money(debt.amount)},
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(context.tr('ڕەتکردنەوە')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(context.tr('واسڵکردن')),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(context.tr('ڕەتکردنەوە')),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(context.tr('واسڵکردن')),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      if (!mounted) return;
+      );
+      if (confirm != true || !mounted) return;
       final db = ref.read(localDbProvider);
       final user = ref.read(authProvider);
       final now = DateTime.now().toIso8601String();
@@ -119,7 +127,10 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
         'paymentMethod': 'debt',
       });
       await db.deleteDebt(debt.id);
+      if (!mounted) return;
       setState(() {});
+    } finally {
+      _settlingIds.remove(debt.id);
     }
   }
 
@@ -128,7 +139,7 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
     final dt = DateTime.tryParse(iso);
     if (dt == null) return iso;
     final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-    final amPm = dt.hour >= 12 ? 'PM' : 'AM';
+    final amPm = dt.hour >= 12 ? context.tr('د.ن') : context.tr('پ.ن');
     return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')} '
         '${hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} $amPm';
   }

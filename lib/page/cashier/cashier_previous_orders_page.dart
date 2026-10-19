@@ -293,7 +293,7 @@ class _CashierPreviousOrdersPageState
                         ),
                         _chip(
                           Icons.schedule_rounded,
-                          formatShiftTime(summary.lastSettledAt),
+                          formatShiftTime(context, summary.lastSettledAt),
                           AppColors.softText,
                         ),
                       ],
@@ -534,7 +534,7 @@ class _CashierTableHistoryPageState
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  formatShiftTime(order.settledAt),
+                  formatShiftTime(context, order.settledAt),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

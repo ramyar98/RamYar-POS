@@ -41,6 +41,13 @@ class _TablePageState extends ConsumerState<TablePage> {
   String _selectedCategory = 'هەموو';
   final List<OrderItem> _pendingItems = [];
   bool _printEnabled = true;
+
+  /// True while `_sendPendingItems` is writing to the database.
+  ///
+  /// The send button is only gated on `_pendingItems.isEmpty`, which does not
+  /// change until the awaited batch write returns - so without this guard a
+  /// fast double-tap sends the same dishes twice and prints two kitchen tickets.
+  bool _sendingPendingItems = false;
   List<Map<String, dynamic>> _categories = [];
   List<Map<String, dynamic>> _menuItems = [];
   bool _menuLoading = true;
@@ -181,18 +188,26 @@ class _TablePageState extends ConsumerState<TablePage> {
   }
 
   Future<void> _sendPendingItems() async {
-    final notifier = ref.read(waiterProvider.notifier);
-    final user = ref.read(authProvider);
-    await notifier.batchSendAndOccupy(
-      widget.tableNumber,
-      _pendingItems,
-      guestCount: widget.initialGuestCount,
-      waiterId: user?.id.toString() ?? '',
-    );
-    if (_printEnabled) {
-      await _dispatchPrintJobs();
+    if (_sendingPendingItems || _pendingItems.isEmpty) return;
+    setState(() => _sendingPendingItems = true);
+    try {
+      final notifier = ref.read(waiterProvider.notifier);
+      final user = ref.read(authProvider);
+      await notifier.batchSendAndOccupy(
+        widget.tableNumber,
+        _pendingItems,
+        guestCount: widget.initialGuestCount,
+        waiterId: user?.id.toString() ?? '',
+      );
+      if (!mounted) return;
+      if (_printEnabled) {
+        await _dispatchPrintJobs();
+      }
+      if (!mounted) return;
+      setState(() => _pendingItems.clear());
+    } finally {
+      if (mounted) setState(() => _sendingPendingItems = false);
     }
-    setState(() => _pendingItems.clear());
   }
 
   Future<void> _notifyCashier() async {
@@ -890,6 +905,7 @@ class _TablePageState extends ConsumerState<TablePage> {
             children: [
               _QuantityButton(
                 icon: Icons.remove,
+                tooltip: context.tr('کەمکردن'),
                 onTap: () => _decrementPending(index),
               ),
               const SizedBox(width: 6),
@@ -904,21 +920,36 @@ class _TablePageState extends ConsumerState<TablePage> {
               const SizedBox(width: 6),
               _QuantityButton(
                 icon: Icons.add,
+                tooltip: context.tr('زیادکردن'),
                 onTap: () => _incrementPending(index),
               ),
               const SizedBox(width: 8),
-              InkWell(
-                onTap: () => _decrementPending(index),
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(
-                    Icons.delete_outline_rounded,
-                    size: 18,
-                    color: AppColors.danger,
+              Tooltip(
+                message: context.tr('سڕینەوە'),
+                child: InkWell(
+                  // The trash removes the whole line; it used to call
+                  // `_decrementPending`, so a quantity of 5 needed five taps.
+                  onTap: () => setState(() => _pendingItems.removeAt(index)),
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Center(
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                          color: AppColors.danger,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -1012,7 +1043,9 @@ class _TablePageState extends ConsumerState<TablePage> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _pendingItems.isEmpty ? null : _sendPendingItems,
+              onPressed: _pendingItems.isEmpty || _sendingPendingItems
+                  ? null
+                  : _sendPendingItems,
               icon: const Icon(Icons.send_rounded),
               label: Text(
                 _pendingItems.isEmpty
@@ -1131,20 +1164,38 @@ class _EmptyCart extends StatelessWidget {
 class _QuantityButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _QuantityButton({required this.icon, required this.onTap});
+  final String tooltip;
+  const _QuantityButton({
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        // A 40x40 hit area around a 32px chip: the old 26px control was easy to
+        // miss while the waiter was carrying a tray.
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Center(
+            child: Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 18, color: AppColors.primary),
+            ),
+          ),
         ),
-        child: Icon(icon, size: 18, color: AppColors.primary),
       ),
     );
   }

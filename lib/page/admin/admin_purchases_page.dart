@@ -11,6 +11,7 @@ import '../../database/local_db.dart';
 import '../../models/settlement_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/admin_date_filter_bar.dart';
+import 'payment_method_style.dart';
 
 class AdminPurchasesPage extends ConsumerStatefulWidget {
   const AdminPurchasesPage({super.key});
@@ -445,7 +446,7 @@ class _AdminPurchasesPageState extends ConsumerState<AdminPurchasesPage> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      row.at.isEmpty ? '' : row.at.substring(0, 10),
+                      row.at.isEmpty ? '' : formatIsoDate(row.at),
                       style: const TextStyle(
                         color: AppColors.softText,
                         fontSize: 11,

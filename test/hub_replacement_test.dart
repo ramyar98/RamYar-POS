@@ -113,7 +113,20 @@ void main() {
 
       // A leftover hub here would make the next start fail the same way, so the
       // teardown has to release the port rather than just drop the reference.
-      expect(await _isListening(port), isFalse,
+      //
+      // `disconnectSync` tears the server down with a fire-and-forget `stop()`
+      // (`HttpServer.close()` finishes asynchronously), so a single immediate
+      // probe races the close and flaked on the macOS CI runner. The guarantee
+      // being pinned is that the port *is* released, not that it is released
+      // within one microtask - so poll briefly before failing.
+      var released = false;
+      for (var i = 0; i < 40 && !released; i++) {
+        released = await _isListening(port) == false;
+        if (!released) {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        }
+      }
+      expect(released, isTrue,
           reason: 'tearing the sync layer down must release the port');
     },
   );

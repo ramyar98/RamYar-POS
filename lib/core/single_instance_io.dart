@@ -24,7 +24,19 @@ int instanceLockPortFor(String executablePath) {
   // FNV-1a over the lower-cased directory. Lower-cased because Windows paths
   // are case-insensitive: `C:\Shop` and `c:\shop` are the same install and
   // must map to the same lock.
-  final dir = File(executablePath).parent.path.toLowerCase();
+  //
+  // The directory is taken by hand instead of `File().parent` because
+  // `File().parent` only understands the *host* platform's separator. On a
+  // macOS or Linux machine a Windows-style path such as
+  // `C:\Shops\inst1\ramyar_pos.exe` contains no `/` at all, so its parent
+  // came out empty and every Windows install hashed to the same port - which
+  // is exactly what made the lock-port test fail on the macOS CI runner while
+  // passing on Windows. Normalising both separators here keeps the derivation
+  // identical on every platform.
+  final normalized = executablePath.replaceAll('\\', '/');
+  final slash = normalized.lastIndexOf('/');
+  final dir = (slash <= 0 ? normalized : normalized.substring(0, slash))
+      .toLowerCase();
   var hash = 0x811c9dc5;
   for (final unit in dir.codeUnits) {
     hash ^= unit;

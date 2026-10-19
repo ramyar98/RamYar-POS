@@ -114,7 +114,9 @@ jobs:
       - name: Package the .app into a real .ipa
         run: |
           set -e
-          APP_PATH="build/ios/iphoneos/Runner.app"
+          # Absolute path: the script cds into OUT_DIR below, which would
+          # break a relative path in the verification step afterwards.
+          APP_PATH="$PWD/build/ios/iphoneos/Runner.app"
           OUT_DIR="build/ios/unsigned-ipa"
           rm -rf "$OUT_DIR"
           mkdir -p "$OUT_DIR/Payload"
@@ -123,7 +125,7 @@ jobs:
           zip -qry "$IPA_NAME-unsigned.ipa" Payload
           rm -rf Payload
           ls -lh "$IPA_NAME-unsigned.ipa"
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist" || true
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@v4

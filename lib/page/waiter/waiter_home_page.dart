@@ -622,41 +622,50 @@ class _WaiterHomePageState extends ConsumerState<WaiterHomePage>
   Widget build(BuildContext context) {
     final tablesAsync = ref.watch(waiterProvider);
     final isPhone = Responsive.isPhone(context);
+    // One slim orange pill for both layouts. The captain's app bar is crowded,
+    // so the button stays short from top to bottom while it keeps its long
+    // sideways shape; the gradient runs top→bottom inside the orange family (no
+    // second hue), so it reads as a single orange button with a little depth.
+    const addTableGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Color(0xFFFF7A4A), AppColors.primary],
+    );
     final addTableButton = isPhone
         ? Container(
+            width: 40,
+            height: 32,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [AppColors.primary, Color(0xFF0C856B)],
-              ),
+              gradient: addTableGradient,
               borderRadius: BorderRadius.circular(10),
             ),
-            constraints: const BoxConstraints(minHeight: 36, minWidth: 40),
             child: IconButton(
               onPressed: _showAddTableDialog,
-              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 19),
               tooltip: context.tr('زیادکردنی مێز'),
               padding: EdgeInsets.zero,
+              style: IconButton.styleFrom(
+                minimumSize: const Size(40, 32),
+                maximumSize: const Size(40, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
           )
         : Container(
+            height: 32,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [AppColors.primary, Color(0xFF0C856B)],
-              ),
+              gradient: addTableGradient,
               borderRadius: BorderRadius.circular(10),
             ),
-            constraints: const BoxConstraints(minHeight: 36, minWidth: 0),
             child: TextButton.icon(
               onPressed: _showAddTableDialog,
-              icon: const Icon(Icons.add, size: 15, color: Colors.white),
+              icon: const Icon(Icons.add, size: 14, color: Colors.white),
               label: Text(context.tr('زیادکردنی مێز'),
-                  style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w600)),
+                  style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w600)),
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
+                minimumSize: const Size(0, 32),
+                maximumSize: const Size(double.infinity, 32),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
@@ -691,7 +700,7 @@ class _WaiterHomePageState extends ConsumerState<WaiterHomePage>
         leadingWidth: isPhone ? 48 : 130,
         leading: Padding(
           padding: const EdgeInsetsDirectional.only(start: 8),
-          child: addTableButton,
+          child: Center(child: addTableButton),
         ),
         actions: [
           ScrollableAppBarActions(children: [

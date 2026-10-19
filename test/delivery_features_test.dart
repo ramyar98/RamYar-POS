@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:ramyar_pos/core/app.dart';
+import 'package:ramyar_pos/core/colors.dart';
 import 'package:ramyar_pos/core/language.dart';
 import 'package:ramyar_pos/database/local_db.dart';
 import 'package:ramyar_pos/models/delivery_company_model.dart';
@@ -294,6 +295,42 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
       disconnectSync(db);
       await tester.pump();
+    });
+  });
+
+  group('captain app bar (add-table button)', () {
+    testWidgets('the pill is a slim, all-orange vertical gradient',
+        (tester) async {
+      await _pumpPage(tester, const WaiterHomePage(), db,
+          size: const Size(390, 844));
+
+      final button = find.byTooltip('زیادکردنی مێز');
+      expect(button, findsOneWidget);
+
+      // The gradient must stay inside the orange family: a stray second hue
+      // (the old teal 0xFF0C856B) is exactly what this test guards against.
+      final containers =
+          find.ancestor(of: button, matching: find.byType(Container));
+      LinearGradient? gradient;
+      for (var i = 0; i < containers.evaluate().length; i++) {
+        final decoration =
+            tester.widget<Container>(containers.at(i)).decoration;
+        if (decoration is BoxDecoration &&
+            decoration.gradient is LinearGradient) {
+          gradient = decoration.gradient as LinearGradient;
+          break;
+        }
+      }
+      expect(gradient, isNotNull,
+          reason: 'the pill must carry the orange gradient');
+      expect(gradient!.begin, Alignment.topCenter);
+      expect(gradient.end, Alignment.bottomCenter);
+      expect(gradient.colors, const [Color(0xFFFF7A4A), AppColors.primary]);
+
+      // Slim from top to bottom, still long sideways.
+      final size = tester.getSize(button);
+      expect(size.height, lessThanOrEqualTo(36));
+      expect(size.width, greaterThanOrEqualTo(size.height));
     });
   });
 

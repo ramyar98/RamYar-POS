@@ -271,15 +271,17 @@ codes, plus add-table, connection, delivery-inbox and account controls.
 
 **Role:** waiter only.
 
-- **“زیادکردنی مێز”** *[Add table]* — plus icon — opens the **Add-table dialog**
-  (table number/name field; **Cancel (ڕەتکردنەوە)** / **Add (زیادکردن)**; duplicate
-  names show “sorry, this table already exists”).
+- **“زیادکردنی مێز”** *[Add table]* — a **slim orange pill** (32 px tall, kept
+  long sideways, a top→bottom orange-only gradient — no second hue) that opens
+  the **Add-table dialog** (table number/name field; **Cancel (ڕەتکردنەوە)** /
+  **Add (زیادکردن)**; duplicate names show “sorry, this table already exists”).
 - **Connection pill** — shows Disconnected (red), Connected (amber), Sent (blue),
   Printed (green), Rejected (red block) — tap to connect/disconnect.
 - **Delivery inbox** — envelope icon with a badge (number of waiting/rejected
   deliveries) — opens the **Order delivery status** screen.
-- **Waiter avatar menu** — **Settings (ڕێخستن)** opens **Waiter settings**;
-  **Log out (دەرچوون)** with confirmation (Cancel / Log out).
+- **Captain avatar menu** — the role label reads **کاپتن** *[Captain]* (not
+  “وەیتەر”); **Settings (ڕێخستن)** opens **Waiter settings**; **Log out
+  (دەرچوون)** with confirmation (Cancel / Log out).
 - **Table cards** (tappable) — statuses: **Empty (بەتاڵ)**, **Customer seated
   (موشتەری دانیشتووە)**, **Bill requested (داوای پارەی کردووە)**, **Overdue
   (دواکەوتوو)** (red after 10 minutes). Each card shows the table name, seated

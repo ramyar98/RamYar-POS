@@ -20,7 +20,7 @@ class PrintPreview {
             label: ctx.tr('مێز و کات'),
             lines: [
               '${ctx.tr('مێز')}: ${job.items.first.tableNumber}',
-              '${ctx.tr('وەیتەر')}: ${job.items.first.waiterName}',
+              '${ctx.tr('کاپتن')}: ${job.items.first.waiterName}',
               '${ctx.tr('کات')}: ${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}',
             ],
           ),

@@ -42,6 +42,11 @@ class LocalDatabase {
   String _dbPath = '';
 
   void Function(String action, Map<String, dynamic> data)? onMutation;
+  /// True when this device is running a full server (cashier hub). Used to
+  /// stamp order items as "arrived at the till" even for locally-created lines
+  /// (pre-ack insertions that would otherwise look un-arrived in reconnect
+  /// snapshots).
+  bool isHub = false;
   int remoteMutationDepth = 0;
 
   /// Default delivery companies shipped with a fresh install; more can be
@@ -159,7 +164,7 @@ class LocalDatabase {
 
   /// Current on-disk schema version. Bumped whenever [_createTables] or
   /// [_migrate] gain a table, a column or an index.
-  static const int schemaVersion = 45;
+  static const int schemaVersion = 46;
 
   Future<void> init({bool inMemory = false, String? path}) async {
     if (_db != null) return;
@@ -349,6 +354,7 @@ class LocalDatabase {
     _dbPath = '';
     onMutation = null;
     remoteMutationDepth = 0;
+    isHub = false;
     usersRevision.value = 0;
     deliveryCompaniesRevision.value = 0;
     foodMenuRevision.value = 0;
@@ -389,6 +395,9 @@ class LocalDatabase {
         createdAt TEXT NOT NULL,
         waiterName TEXT DEFAULT '',
         waiterRole INTEGER DEFAULT -1,
+        syncedAt TEXT DEFAULT '',
+        printedAt TEXT DEFAULT '',
+        failedPrinters TEXT DEFAULT '',
         PRIMARY KEY (id, tableId)
       )
     ''');
@@ -1623,6 +1632,49 @@ class LocalDatabase {
           "ALTER TABLE tables ADD COLUMN noteUpdatedAt TEXT DEFAULT ''",
         );
       } catch (_) {}
+    }
+    if (oldVersion < 46) {
+      // v46: the delivery screen moves from "did the TABLE arrive?" to
+      // per-dish truth - did THIS dish reach the till, and did THIS dish's
+      // ticket come out of ITS printer? Three columns carry that truth.
+      for (final column in ['syncedAt', 'printedAt', 'failedPrinters']) {
+        try {
+          await db.execute(
+            "ALTER TABLE order_items ADD COLUMN $column TEXT DEFAULT ''",
+          );
+        } catch (_) {}
+      }
+      // Backfill from the table-level state the old build kept: a table marked
+      // arrived had every one of its dishes at the till by definition, and a
+      // table whose print was marked done had printed tickets. Dishes added
+      // afterwards keep an empty stamp and correctly read as still travelling.
+      // Wrapped: a legacy fixture (or a very old database) may not carry the
+      // `order_delivery` table at all, and a missing table simply means there is
+      // no table-level state to copy.
+      try {
+        await db.execute('''
+          UPDATE order_items SET syncedAt = COALESCE((
+            SELECT arrivedAt FROM order_delivery
+            WHERE order_delivery.tableId = order_items.tableId
+              AND arrivedAt != ''
+            LIMIT 1
+          ), '')
+          WHERE syncedAt = ''
+        ''');
+        await db.execute('''
+          UPDATE order_items SET printedAt = COALESCE((
+            SELECT printedAt FROM order_delivery
+            WHERE order_delivery.tableId = order_items.tableId
+              AND printedAt != ''
+            LIMIT 1
+          ), '')
+          WHERE printedAt = ''
+        ''');
+      } catch (_) {}
+      // A legacy print-failure cannot name the printer that failed (the old
+      // code only knew "the table failed"), so it is left to speak for itself:
+      // those dishes keep printedAt empty and therefore show up under
+      // "دوبارە پرێنت", which is exactly where they belong.
     }
 
     await _createSyncIndexes(db);
@@ -3229,6 +3281,7 @@ class LocalDatabase {
         'createdAt': resolved.createdAt,
         'waiterName': resolved.waiterName,
         'waiterRole': resolved.waiterRole,
+        'syncedAt': (remoteMutationDepth > 0 || isHub) ? now : '',
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
       await _reopenBilledTable(tableId, txn: txn);
       await _recalculateTotalInTxn(txn, tableId);
@@ -3258,6 +3311,7 @@ class LocalDatabase {
           'createdAt': item.createdAt,
           'waiterName': item.waiterName,
           'waiterRole': item.waiterRole,
+          'syncedAt': (remoteMutationDepth > 0 || isHub) ? nowStr : '',
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
       }
       await _reopenBilledTable(tableId, txn: txn);
@@ -3334,6 +3388,7 @@ class LocalDatabase {
           'createdAt': item.createdAt,
           'waiterName': item.waiterName,
           'waiterRole': item.waiterRole,
+          'syncedAt': (remoteMutationDepth > 0 || isHub) ? nowStr : '',
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
       }
       // The total is computed from the items in the SAME transaction that wrote
@@ -4106,6 +4161,11 @@ class LocalDatabase {
           await txn.insert('tables', map);
         }
       }
+      // A hub on a newer build carries per-dish stamps (`syncedAt`,
+      // `printedAt`, `failedPrinters`) this device may not have yet; filtering
+      // to the local columns keeps an unknown field from throwing the
+      // statement and rolling back every other table in this transaction.
+      final itemColumns = await _tableColumns(txn, 'order_items');
       for (final entry in itemsMap.entries) {
         final tableId = int.tryParse('${entry.key}') ?? 0;
         if (tableId <= 0) continue;
@@ -4120,7 +4180,10 @@ class LocalDatabase {
             limit: 1,
           );
           if (existing.isEmpty) {
-            await txn.insert('order_items', row);
+            await txn.insert(
+              'order_items',
+              _restrictToColumns(row, itemColumns),
+            );
           }
         }
       }
@@ -6186,6 +6249,7 @@ class LocalDatabase {
           'createdAt': itemNow,
           'waiterName': item.waiterName,
           'waiterRole': item.waiterRole,
+          'syncedAt': (remoteMutationDepth > 0 || isHub) ? itemNow : '',
         }, conflictAlgorithm: ConflictAlgorithm.ignore);
       }
       // Same transaction as the items: the table's money can never be stale
@@ -6216,10 +6280,32 @@ class LocalDatabase {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<void> markOrderItemsArrived(int tableId, List<String>? itemIds) async {
+    final now = DateTime.now().toIso8601String();
+    final db = _db;
+    if (db == null) return;
+    if (itemIds == null || itemIds.isEmpty) {
+      await db.update(
+        'order_items',
+        {'syncedAt': now},
+        where: "tableId = ? AND syncedAt = ''",
+        whereArgs: [tableId],
+      );
+      return;
+    }
+    final placeholders = List.filled(itemIds.length, '?').join(',');
+    await db.update(
+      'order_items',
+      {'syncedAt': now},
+      where: "tableId = ? AND syncedAt = '' AND id IN ($placeholders)",
+      whereArgs: [tableId, ...itemIds],
+    );
+  }
+
   Future<void> markOrderArrived(
     int tableId, {
-    bool rejected = false,
     String arrivedAt = '',
+    bool rejected = false,
   }) async {
     final now = arrivedAt.isNotEmpty
         ? arrivedAt
@@ -6256,10 +6342,128 @@ class LocalDatabase {
     );
   }
 
+  static String _failedPrintersCsv(List<int> values) {
+    final set = <int>{...values};
+    final list = set.toList()..sort();
+    return list.map((v) => '$v').join(',');
+  }
+
+  static List<int> _parseFailedPrinters(String csv) {
+    if (csv.isEmpty) return [];
+    return csv
+        .split(',')
+        .map((s) => int.tryParse(s.trim()))
+        .whereType<int>()
+        .toList();
+  }
+
+  Future<void> stampItemPrintResult(
+    int tableId,
+    List<String> itemIds,
+    int printerType, {
+    required bool success,
+  }) async {
+    final db = _db;
+    if (db == null) return;
+    final now = DateTime.now().toIso8601String();
+    for (final id in itemIds) {
+      final row = await db.query(
+        'order_items',
+        where: 'id = ? AND tableId = ?',
+        whereArgs: [id, tableId],
+        limit: 1,
+      );
+      if (row.isEmpty) continue;
+      final m = Map<String, dynamic>.from(row.first);
+      final printedAt = m['printedAt'] as String? ?? '';
+      final failed = _parseFailedPrinters(m['failedPrinters'] as String? ?? '');
+      if (success) {
+        failed.remove(printerType);
+        await db.update(
+          'order_items',
+          {
+            'printedAt': printedAt.isEmpty ? now : printedAt,
+            'failedPrinters': _failedPrintersCsv(failed),
+          },
+          where: 'id = ? AND tableId = ?',
+          whereArgs: [id, tableId],
+        );
+      } else {
+        if (!failed.contains(printerType)) {
+          failed.add(printerType);
+        }
+        await db.update(
+          'order_items',
+          {
+            'failedPrinters': _failedPrintersCsv(failed),
+          },
+          where: 'id = ? AND tableId = ?',
+          whereArgs: [id, tableId],
+        );
+      }
+    }
+    await refreshDeliveryPrintState(tableId);
+  }
+
+  Future<void> refreshDeliveryPrintState(int tableId) async {
+    final items = await getOrderItems(tableId);
+    if (items.isEmpty) return;
+    bool anyFailed = false;
+    bool allPrinted = true;
+    for (final it in items) {
+      final printed = it.printed;
+      final failed = it.failedPrinterTypes.isNotEmpty;
+      if (failed) anyFailed = true;
+      if (!printed) allPrinted = false;
+    }
+    if (allPrinted) {
+      await markOrderPrinted(tableId);
+      return;
+    }
+    if (anyFailed) {
+      await markOrderPrintFailed(tableId);
+      return;
+    }
+  }
+
   Future<List<OrderDeliveryModel>> getOrderDeliveries() async {
     final maps = await db.query('order_delivery', orderBy: 'sentAt DESC');
     final deliveries = maps.map((m) => OrderDeliveryModel.fromMap(m)).toList();
-    return deliveries.where((d) => !d.shouldAutoExpire).toList();
+    final filtered = deliveries.where((d) => !d.shouldAutoExpire).toList();
+    if (filtered.isEmpty) return filtered;
+    final tableIds = filtered.map((d) => d.tableId).toList();
+    final inClause = List.filled(tableIds.length, '?').join(',');
+    final itemMaps = await db.query(
+      'order_items',
+      where: 'tableId IN ($inClause)',
+      whereArgs: tableIds,
+    );
+    final itemsByTable = <int, List<DeliveryItemStatus>>{};
+    for (final m in itemMaps) {
+      final t = m['tableId'] as int;
+      final it = DeliveryItemStatus(
+        id: m['id'] as String? ?? '',
+        name: m['name'] as String? ?? '',
+        quantity: m['quantity'] as int? ?? 1,
+        category: m['category'] as String? ?? '',
+        syncedAt: m['syncedAt'] as String? ?? '',
+        printedAt: m['printedAt'] as String? ?? '',
+        failedPrinters: m['failedPrinters'] as String? ?? '',
+      );
+      itemsByTable[t] = (itemsByTable[t] ?? [])..add(it);
+    }
+    return filtered.map((d) => d.withItems(itemsByTable[d.tableId] ?? const [])).toList();
+  }
+
+  Future<void> supersedePrintJobs(int tableId) async {
+    final db = _db;
+    if (db == null) return;
+    await db.update(
+      'print_jobs',
+      {'status': printJobPrinted},
+      where: 'tableId = ? AND status IN (?, ?)',
+      whereArgs: [tableId, printJobPending, printJobFailed],
+    );
   }
 
   Future<void> clearOrderDelivery(int tableId) async {

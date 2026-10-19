@@ -53,6 +53,7 @@ class PrintRouter {
           tableNumber: tableNumber,
           tableLabel: tableLabel,
           price: item.price,
+          itemId: item.id,
         )).toList(),
         printerType: entry.key,
         printerName: printerConfig?.name ?? '',
@@ -75,6 +76,9 @@ class PrintRouter {
 
     return [PrinterType.kitchen];
   }
+
+  List<PrinterType> resolvePrintersForItem(OrderItem item) =>
+      _resolvePrintersForItem(item);
 
   PrinterConfig? _printerForType(PrinterType type) {
     final printers = config.printers

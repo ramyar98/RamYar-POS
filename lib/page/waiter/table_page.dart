@@ -18,6 +18,7 @@ import '../../services/app_localizations.dart';
 import '../../services/food_localization.dart';
 import '../../services/menu_helper.dart';
 import '../../services/print_router.dart';
+import '../../services/sync_provider.dart';
 import '../../services/table_lock_controller.dart';
 import '../../services/table_note_policy.dart';
 import '../cashier/transfer_page.dart';
@@ -250,11 +251,8 @@ class _TablePageState extends ConsumerState<TablePage> {
       tableNumber: widget.tableNumber,
     );
     if (jobs.isEmpty) return;
-    // No print-preview popup here: the "چاپ" checkbox next to the send button
-    // decided that printing is wanted, so tickets are dispatched directly.
-    for (final job in jobs) {
-      unawaited(PrintRouter.dispatchPrintJob(job));
-    }
+    unawaited(dispatchOrderPrintJobs(ref.read(localDbProvider), jobs,
+        tableId: widget.tableNumber));
   }
 
   /// What this table should be called on screen.

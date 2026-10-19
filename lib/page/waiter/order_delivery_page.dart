@@ -6,22 +6,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/colors.dart';
 import '../../core/constants.dart';
 import '../../core/responsive.dart';
+import '../../database/local_db.dart';
 import '../../models/order_delivery_model.dart';
+import '../../models/order_model.dart';
+import '../../models/printer_model.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/printer_provider.dart';
 import '../../providers/waiter_provider.dart';
 import '../../services/app_localizations.dart';
+import '../../services/print_router.dart';
 import '../../services/sync_provider.dart';
 import 'table_page.dart';
 
-/// ڕەنگی زەرد بۆ داواکارییە چاوەڕێکەرەکەن (Pending Connection)
+/// ڕەنگی زەرد بۆ داواکارییە چاوەڕێکەرەکان (Pending Connection)
 const Color _pendingYellow = Color(0xFFE6A700);
 
 /// پەڕەی تەواو بۆ دۆخی ناردنی داواکارییەکان (Order Delivery).
 ///
-/// ئەم پەڕەیە دۆخی هەر داواکارییەک پیشان دەدات:
-///  - زەرد (Pending Connection): داواکاری نێردراوە بەڵام نەگەیشتووە / لە ڕیزی سینکدایە
-///  - شین (Arrived): گەیشتە لای کاشێر بەڵام هێشتا پرێنت نەکراوە
-///  - سەوز (Printed): پرێنت کرا
-///  - سوور (Rejected): ڕەفز کراوە (دوبارە بووە)
+/// ئەم پەڕەیە بە ئاستی ئایتیم کار دەکات، نەک تەنها بە ئاستی مێز:
+///  - گەیشت / نەگەیشت: ئایا ئەم خواردنە گەیشتووەتە سیستەمی کاشێر؟
+///  - پرێنت / دوبارە پرێنت: ئایا تیکەتی ئەم خواردنە لە هەموو پرێنتەرە
+///    تەرخانکراوەکانی (چێشتخانە، باڕ، پرێنتی کاشێر، ژووری نێرگیلە) دەرچووە؟
+///    هەر ئایتیمێک پرێنت نەکرابێت لە بەشی «دوبارە پرێنت» دەردەکەوێت.
 class OrderDeliveryPage extends ConsumerStatefulWidget {
   const OrderDeliveryPage({super.key});
 
@@ -37,10 +43,7 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
   void initState() {
     super.initState();
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted) {
-        ref.invalidate(deliveryStatusProvider);
-        ref.invalidate(pendingSyncCountProvider);
-      }
+      if (mounted) _refresh();
     });
   }
 
@@ -55,27 +58,16 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
     ref.invalidate(pendingSyncCountProvider);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final syncState = ref.watch(syncConnectionProvider);
-    final deliveriesAsync = ref.watch(deliveryStatusProvider);
-    final pendingAsync = ref.watch(pendingSyncCountProvider);
-    final deliveries =
-        deliveriesAsync.asData?.value ?? const <OrderDeliveryModel>[];
-    final pendingCount = pendingAsync.asData?.value ?? 0;
+  // ==================== Item-level filters ====================
 
-    final waiting = deliveries.where((d) => d.isNotArrived).length;
-    final arrived = deliveries
-        .where(
-          (d) =>
-              d.hasArrived && !d.hasPrinted && !d.isPrintFailed && !d.rejected,
-        )
-        .length;
-    final retryPrints = deliveries.where((d) => d.isRetryPrint).length;
-    final printed = deliveries.where((d) => d.isPrinted).length;
-    final rejected = deliveries.where((d) => d.rejected).length;
-    final visibleDeliveries = deliveries.where((d) {
-      switch (_selectedFilter) {
+  /// ئایا ئەم داواکارییە لانیکەم یەک ئایتمی هەیە کە لەگەڵ فلتەرەکە دەگونجێت؟
+  ///
+  /// کاتێک ئایتیمەکان نەخوێنرێنەوە (ڕیزی کۆن)، دۆخی ئاستی مێز وەک پشتیوان
+  /// بەکار دەهێنرێت تا ڕەفتاری پێشوو نەفەوتێت.
+  bool _matchesFilter(OrderDeliveryModel d, String filter) {
+    if (filter == 'all') return true;
+    if (d.items.isEmpty) {
+      switch (filter) {
         case 'arrived':
           return d.hasArrived &&
               !d.hasPrinted &&
@@ -87,10 +79,81 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
           return d.isPrinted;
         case 'retry_print':
           return d.isRetryPrint;
-        default:
-          return true;
       }
-    }).toList();
+      return true;
+    }
+    switch (filter) {
+      case 'arrived':
+        return d.items.any((i) => i.arrived);
+      case 'not_arrived':
+        return d.items.any((i) => !i.arrived);
+      case 'printed':
+        return d.items.any((i) => i.printed);
+      case 'retry_print':
+        return d.items.any((i) => i.needsPrint);
+    }
+    return true;
+  }
+
+  /// بەشدارییەکی یەک داواکاری بۆ ژماردنی فلتەرەکە (بە ژمارەی ئایتیم).
+  int _dishContribution(OrderDeliveryModel d, String filter) {
+    switch (filter) {
+      case 'arrived':
+        return d.items.where((i) => i.arrived).length;
+      case 'not_arrived':
+        return d.items.where((i) => !i.arrived).length;
+      case 'printed':
+        return d.items.where((i) => i.printed).length;
+      case 'retry_print':
+        return d.unprintedItems.length;
+      default:
+        return d.itemTotal;
+    }
+  }
+
+  int _countFor(List<OrderDeliveryModel> deliveries, String filter) {
+    var count = 0;
+    for (final d in deliveries) {
+      if (d.items.isEmpty) {
+        if (_matchesFilter(d, filter)) count++;
+        continue;
+      }
+      count += _dishContribution(d, filter);
+    }
+    return count;
+  }
+
+  /// ئایتیمەکانی ناو کارتێک کە لەگەڵ فلتەری هەڵبژێردراو دەگونجێن.
+  List<DeliveryItemStatus> _visibleItems(OrderDeliveryModel d) {
+    if (d.items.isEmpty) return const [];
+    switch (_selectedFilter) {
+      case 'arrived':
+        return d.items.where((i) => i.arrived).toList();
+      case 'not_arrived':
+        return d.items.where((i) => !i.arrived).toList();
+      case 'printed':
+        return d.items.where((i) => i.printed).toList();
+      case 'retry_print':
+        return d.unprintedItems;
+      default:
+        return d.items;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final syncState = ref.watch(syncConnectionProvider);
+    final deliveriesAsync = ref.watch(deliveryStatusProvider);
+    final pendingAsync = ref.watch(pendingSyncCountProvider);
+    final deliveries =
+        deliveriesAsync.asData?.value ?? const <OrderDeliveryModel>[];
+    final pendingCount = pendingAsync.asData?.value ?? 0;
+
+    final visibleDeliveries = deliveries
+        .where((d) => _matchesFilter(d, _selectedFilter))
+        .toList();
+
+    final rejected = deliveries.where((d) => d.rejected).length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -119,43 +182,28 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
           padding: Responsive.screenPadding(context),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // 600, the app-wide phone/tablet breakpoint (the page used 700
-              // before, which left 600-699 on the phone layout while every
-              // other page went tablet there).
+              // 600, the app-wide phone/tablet breakpoint.
               final isDesktop = constraints.maxWidth >= 600;
-              // One scroll region for the whole body. The old layout was a
-              // Column with a fixed header stack (banner + filter chips +
-              // legend) above an Expanded list: on a short landscape phone the
-              // header alone was taller than the body and the Column threw a
-              // RenderFlex overflow, and the empty state inside the leftover
-              // Expanded got whatever tiny height remained and overflowed a
-              // second time. As slivers, the header, the legend and the cards
-              // share one viewport and simply scroll when they do not fit.
+              // One scroll region for the whole body. As slivers, the header,
+              // the legend and the cards share one viewport and simply scroll
+              // when they do not fit - no RenderFlex overflow on short screens.
               return CustomScrollView(
                 slivers: [
                   SliverToBoxAdapter(
                     child: _buildConnectionBanner(syncState, pendingCount),
                   ),
-                  SliverToBoxAdapter(child: _buildFilterBar()),
                   SliverToBoxAdapter(
-                    child: _buildLegendRow(
-                      waiting,
-                      arrived,
-                      retryPrints,
-                      printed,
-                      rejected,
-                    ),
+                    child: _buildFilterBar(deliveries),
+                  ),
+                  SliverToBoxAdapter(
+                    child: _buildLegendRow(deliveries, rejected),
                   ),
                   if (visibleDeliveries.isEmpty)
-                    // fillOverscroll:false + FittedBox: the message is laid out
-                    // in whatever height is left (even close to zero on a
-                    // very short screen) and scales down instead of
-                    // overflowing.
                     SliverFillRemaining(
                       hasScrollBody: false,
                       child: FittedBox(
                         fit: BoxFit.scaleDown,
-                        child: _buildEmptyState(),
+                        child: _buildEmptyState(hasAnyOrder: deliveries.isNotEmpty),
                       ),
                     )
                   else if (isDesktop)
@@ -217,7 +265,7 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
     );
   }
 
-  Widget _buildFilterBar() {
+  Widget _buildFilterBar(List<OrderDeliveryModel> deliveries) {
     final filters = [
       ('all', context.tr('هەموو')),
       ('arrived', context.tr('گەیشت')),
@@ -234,8 +282,14 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
         children: filters.map((entry) {
           final (value, label) = entry;
           final selected = _selectedFilter == value;
+          final count = _countFor(deliveries, value);
           return ChoiceChip(
-            label: Text(label),
+            label: Text(
+              context.trp('{label} ({count})', {
+                'label': label,
+                'count': '$count',
+              }),
+            ),
             selected: selected,
             onSelected: (_) => setState(() => _selectedFilter = value),
             selectedColor: AppColors.primary.withValues(alpha: 0.12),
@@ -251,10 +305,7 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
   }
 
   Widget _buildLegendRow(
-    int waiting,
-    int arrived,
-    int retryPrints,
-    int printed,
+    List<OrderDeliveryModel> deliveries,
     int rejected,
   ) {
     return Padding(
@@ -263,14 +314,26 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
         spacing: 8,
         runSpacing: 8,
         children: [
-          _buildLegendChip(_pendingYellow, context.tr('نەگەیشت'), waiting),
-          _buildLegendChip(AppColors.blue, context.tr('گەیشت'), arrived),
+          _buildLegendChip(
+            _pendingYellow,
+            context.tr('نەگەیشت'),
+            _countFor(deliveries, 'not_arrived'),
+          ),
+          _buildLegendChip(
+            AppColors.blue,
+            context.tr('گەیشت'),
+            _countFor(deliveries, 'arrived'),
+          ),
           _buildLegendChip(
             _pendingYellow,
             context.tr('دوبارە پرێنت'),
-            retryPrints,
+            _countFor(deliveries, 'retry_print'),
           ),
-          _buildLegendChip(AppColors.success, context.tr('پرێنت'), printed),
+          _buildLegendChip(
+            AppColors.success,
+            context.tr('پرێنت'),
+            _countFor(deliveries, 'printed'),
+          ),
           if (rejected > 0)
             _buildLegendChip(AppColors.danger, context.tr('ڕەفز'), rejected),
         ],
@@ -303,7 +366,7 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
               }),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppColors.darkText,
@@ -315,61 +378,130 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({required bool hasAnyOrder}) {
     // No Center here: this column is wrapped in a FittedBox at the call site
-    // (which already centers and scales it), and a Center inside would try to
-    // fill the box, defeating the scale-down.
+    // (which already centers and scales it).
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
-          Icons.mark_email_unread_outlined,
+          hasAnyOrder
+              ? Icons.filter_alt_off_outlined
+              : Icons.mark_email_unread_outlined,
           size: 52,
           color: AppColors.softText.withValues(alpha: 0.3),
         ),
         const SizedBox(height: 12),
         Text(
-          context.tr('هیچ داواکارییەک نەنێردراوە'),
+          hasAnyOrder
+              ? context.tr('هیچ ئایتیمێک نەدۆزرایەوە')
+              : context.tr('هیچ داواکارییەک نەنێردراوە'),
           style: const TextStyle(color: AppColors.softText, fontSize: 15),
         ),
       ],
     );
   }
 
+  // ==================== Actions ====================
+
+  /// دوبارە ناردنی داواکارییەکی نەگەیشتوو (ئاستی مێز).
   Future<void> _retryOrderDelivery(OrderDeliveryModel delivery) async {
     final messenger = ScaffoldMessenger.maybeOf(context);
-    final message = context.tr('داواکاری دوبارە نێردرا');
-    await ref.read(waiterProvider.notifier).resendOrder(delivery.tableId);
-    if (!mounted) return;
-    messenger?.showSnackBar(SnackBar(content: Text(message)));
+    final okMsg = context.tr('داواکاری دوبارە نێردرا');
+    final errMsg = context.tr('هەڵە لە دووبارە ناردن');
+    try {
+      await ref.read(waiterProvider.notifier).resendOrder(delivery.tableId);
+      if (!mounted) return;
+      messenger?.showSnackBar(SnackBar(content: Text(okMsg)));
+    } catch (_) {
+      if (!mounted) return;
+      messenger?.showSnackBar(SnackBar(content: Text(errMsg)));
+    }
   }
 
-  Future<void> _retryPrintDelivery(OrderDeliveryModel delivery) async {
+  /// دوبارە پرێنتنتی تەنها ئەو ئایتیمانەی تیکەتیان کەمە.
+  ///
+  /// پرێنتەرەکان بەم ئایتیمە تەرخانکراوانە ڕێک دەخرێنەوە و تەنها ئەوان
+  /// دەنێردرێن - هەر ئایتیمێک پرێنت نەبێت لە «دوبارە پرێنت» دەردەکەوێت.
+  Future<void> _reprintItems(
+    OrderDeliveryModel d,
+    List<DeliveryItemStatus> targets,
+  ) async {
+    if (targets.isEmpty) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
-    final message = context.tr('دوبارە پرێنت کردن');
-    await ref.read(waiterProvider.notifier).resendOrder(delivery.tableId);
-    if (!mounted) return;
-    messenger?.showSnackBar(SnackBar(content: Text(message)));
+    final okMsg = context.tr('دوبارە پرێنت');
+    final errMsg = context.tr('هەڵە لە پرێنت');
+    final user = ref.read(authProvider);
+    final router = PrintRouter(ref.read(printerProvider));
+    final items = targets
+        .map(
+          (t) => OrderItem(
+            id: t.id,
+            name: t.name,
+            price: 0,
+            quantity: t.quantity,
+            category: t.category,
+          ),
+        )
+        .toList();
+    final jobs = router.routeOrder(
+      items,
+      waiterName: user?.name ?? '',
+      tableNumber: d.tableId,
+    );
+    if (jobs.isEmpty) return;
+    try {
+      await dispatchOrderPrintJobs(
+        ref.read(localDbProvider),
+        jobs,
+        tableId: d.tableId,
+      );
+      if (!mounted) return;
+      messenger?.showSnackBar(SnackBar(content: Text(okMsg)));
+    } catch (_) {
+      if (!mounted) return;
+      messenger?.showSnackBar(SnackBar(content: Text(errMsg)));
+    }
+    if (mounted) ref.invalidate(deliveryStatusProvider);
   }
 
-  Widget _buildDesktopSliverGrid(List<OrderDeliveryModel> deliveries,
-      double totalWidth) {
+  /// یەک دوگمە: ئەگەر ئایتیمی پرێنت نەکراو هەبوو، ئەوان دەنێردرێن؛
+  /// ئەگەر نا، داواکارییەکە بە تەواوی دوبارە دەنێردرێت.
+  Future<void> _handleRetry(OrderDeliveryModel d) async {
+    if (d.hasItemState && d.unprintedItems.isNotEmpty) {
+      await _reprintItems(d, d.unprintedItems);
+    } else if (d.isRetryPrint && d.items.isNotEmpty) {
+      await _reprintItems(d, d.items);
+    } else {
+      await _retryOrderDelivery(d);
+    }
+  }
+
+  // ==================== Cards ====================
+
+  Widget _buildDesktopSliverGrid(
+    List<OrderDeliveryModel> deliveries,
+    double totalWidth,
+  ) {
     // Any iPad (740+ pt, matching Responsive.desktopBreakpoint) renders the
-    // same laptop card layout. 600-739 keeps the older, tighter delivery list.
+    // wider card layout. 600-739 keeps the tighter one.
     final maxCrossAxisExtent = totalWidth >= Responsive.desktopBreakpoint
-        ? 340.0
+        ? 360.0
         : totalWidth >= 600
-        ? 300.0
-        : 260.0;
+        ? 320.0
+        : 280.0;
     return SliverGrid(
       gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: maxCrossAxisExtent,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        mainAxisExtent: totalWidth >= Responsive.desktopBreakpoint ? 146 : 156,
+        mainAxisExtent: totalWidth >= Responsive.desktopBreakpoint ? 250 : 230,
       ),
       delegate: SliverChildBuilderDelegate(
-        (context, index) => _buildDeliveryCard(deliveries[index]),
+        (context, index) => _buildDeliveryCard(
+          deliveries[index],
+          bounded: true,
+        ),
         childCount: deliveries.length,
       ),
     );
@@ -379,8 +511,6 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
     return SliverList(
       delegate: SliverChildBuilderDelegate(
         (context, index) => Padding(
-          // The last card needs no trailing gap: the scroll view's own
-          // padding is enough, and skipping it keeps the list bottom flush.
           padding: EdgeInsets.only(
             bottom: index == deliveries.length - 1 ? 0 : 10,
           ),
@@ -391,17 +521,15 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
     );
   }
 
-  Widget _buildDeliveryCard(OrderDeliveryModel d) {
-    final (Color color, String text, IconData icon) = _deliveryStatus(d);
-    // Shared retry button: a 28px-tall tap target is beneath the 44px floor
-    // this app uses everywhere else, and the card has the room for it.
+  Widget _buildDeliveryCard(OrderDeliveryModel d, {bool bounded = false}) {
+    final (Color color, String text, IconData icon) = _cardStatus(d);
+    final items = _visibleItems(d);
+
     Widget retryButton() => TextButton.icon(
-          onPressed: () => d.isRetryPrint
-              ? _retryPrintDelivery(d)
-              : _retryOrderDelivery(d),
-          icon: const Icon(Icons.restart_alt_rounded, size: 15),
+          onPressed: () => _handleRetry(d),
+          icon: const Icon(Icons.restart_alt_rounded, size: 16),
           label: Text(
-            d.isRetryPrint
+            d.unprintedItems.isNotEmpty
                 ? context.tr('دوبارە پرێنت')
                 : context.tr('دوبارە ناردن'),
           ),
@@ -410,175 +538,87 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
           ),
         );
-    final content = LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 360;
 
-        if (compact) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    final header = Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+          ),
+          child: Center(child: Icon(icon, color: color, size: 21)),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radiusMedium,
-                      ),
-                    ),
-                    child: Center(child: Icon(icon, color: color, size: 22)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.trp('مێزی {tableNumber}', {
-                            'tableNumber': '${d.tableId}',
-                          }),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: AppColors.darkText,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${context.tr('نێردراوە')} - ${_formatSentTime(d.sentAt)}',
-                          style: const TextStyle(
-                            color: AppColors.softText,
-                            fontSize: 11,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              Text(
+                context.trp('مێزی {tableNumber}', {
+                  'tableNumber': '${d.tableId}',
+                }),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: AppColors.darkText,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                runSpacing: 8,
-                spacing: 8,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radiusSmall,
-                      ),
-                    ),
-                    child: Text(
-                      text,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                      ),
-                    ),
-                  ),
-                  if (d.canRetry)
-                    retryButton(),
-                ],
+              const SizedBox(height: 2),
+              Text(
+                '${context.tr('نێردراوە')} - ${_formatSentTime(d.sentAt)}',
+                style: const TextStyle(
+                  color: AppColors.softText,
+                  fontSize: 11,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-              ),
-              child: Center(child: Icon(icon, color: color, size: 24)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    context.trp('مێزی {tableNumber}', {
-                      'tableNumber': '${d.tableId}',
-                    }),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: AppColors.darkText,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${context.tr('نێردراوە')} - ${_formatSentTime(d.sentAt)}',
-                    style: const TextStyle(
-                      color: AppColors.softText,
-                      fontSize: 12,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 150),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(
-                        AppConstants.radiusSmall,
-                      ),
-                    ),
-                    child: Text(
-                      text,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (d.canRetry) ...[
-                    const SizedBox(height: 6),
-                    retryButton(),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        );
-      },
+          ),
+        ),
+        const SizedBox(width: 6),
+        _statusPill(color, text),
+      ],
     );
+
+    final children = <Widget>[header];
+
+    if (items.isNotEmpty) {
+      final rows = <Widget>[
+        const Divider(height: 16),
+        if (d.itemTotal > 1)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: _itemSummary(d),
+          ),
+        for (final it in items) _buildItemRow(d, it),
+      ];
+      final itemColumn = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: rows,
+      );
+      children.add(
+        bounded
+            ? Expanded(child: SingleChildScrollView(child: itemColumn))
+            : itemColumn,
+      );
+    } else if (bounded) {
+      children.add(const Spacer());
+    }
+
+    if (d.canRetry || d.unprintedItems.isNotEmpty) {
+      children.add(
+        Align(
+          alignment: AlignmentDirectional.centerEnd,
+          child: retryButton(),
+        ),
+      );
+    }
 
     return Material(
       color: Colors.white,
@@ -599,40 +639,192 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
             border: Border.all(color: color.withValues(alpha: 0.30)),
             borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
           ),
-          child: content,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
+            children: children,
+          ),
         ),
       ),
     );
   }
 
-  (Color, String, IconData) _deliveryStatus(OrderDeliveryModel d) {
-    if (d.isPrinted) {
-      return (
-        AppColors.success,
-        context.tr('پرێنت'),
-        Icons.check_circle_rounded,
-      );
+  Widget _statusPill(Color color, String text) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 120),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+
+  Widget _itemSummary(OrderDeliveryModel d) {
+    const style = TextStyle(fontSize: 11, color: AppColors.softText);
+    return Row(
+      children: [
+        const Icon(Icons.cloud_done_rounded, size: 13, color: AppColors.blue),
+        const SizedBox(width: 3),
+        Text('${d.arrivedItemCount}/${d.itemTotal}', style: style),
+        const SizedBox(width: 10),
+        const Icon(Icons.print_rounded, size: 13, color: AppColors.success),
+        const SizedBox(width: 3),
+        Text('${d.printedItemCount}/${d.itemTotal}', style: style),
+      ],
+    );
+  }
+
+  Widget _buildItemRow(OrderDeliveryModel d, DeliveryItemStatus it) {
+    final label = _printerLabelForItem(it);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${it.name} ×${it.quantity}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, color: AppColors.darkText),
+            ),
+          ),
+          if (label.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Flexible(child: _itemPrinterChip(label)),
+          ],
+          const SizedBox(width: 8),
+          _itemStatusIcons(it),
+          if (it.needsPrint)
+            SizedBox(
+              width: 30,
+              height: 30,
+              child: IconButton(
+                padding: EdgeInsets.zero,
+                iconSize: 16,
+                tooltip: context.tr('دوبارە پرێنت'),
+                onPressed: () => _reprintItems(d, [it]),
+                icon: const Icon(
+                  Icons.replay_rounded,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _itemPrinterChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.softText.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 10, color: AppColors.softText),
+      ),
+    );
+  }
+
+  Widget _itemStatusIcons(DeliveryItemStatus it) {
+    final arrivalColor = it.arrived ? AppColors.blue : _pendingYellow;
+    final printColor = it.printed ? AppColors.success : _pendingYellow;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: it.arrived ? context.tr('گەیشت') : context.tr('نەگەیشت'),
+          child: Icon(
+            it.arrived ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+            size: 15,
+            color: arrivalColor,
+          ),
+        ),
+        const SizedBox(width: 5),
+        Tooltip(
+          message:
+              it.printed ? context.tr('پرێنت') : context.tr('پرێنت نەکراوە'),
+          child: Icon(
+            it.printed ? Icons.print_rounded : Icons.print_disabled_rounded,
+            size: 15,
+            color: printColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  (Color, String, IconData) _cardStatus(OrderDeliveryModel d) {
+    switch (d.itemStatusLabel) {
+      case 'rejected':
+        return (AppColors.danger, context.tr('ڕەفز'), Icons.cancel_rounded);
+      case 'printed':
+        return (
+          AppColors.success,
+          context.tr('پرێنت'),
+          Icons.check_circle_rounded,
+        );
+      case 'print_failed':
+        return (
+          _pendingYellow,
+          context.tr('دوبارە پرێنت'),
+          Icons.print_disabled_rounded,
+        );
+      case 'arrived':
+        return (AppColors.blue, context.tr('گەیشت'), Icons.check_rounded);
+      default:
+        return (_pendingYellow, context.tr('نەگەیشت'), Icons.schedule_rounded);
     }
-    if (d.isRetryPrint) {
-      return (
-        _pendingYellow,
-        context.tr('دوبارە پرێنت'),
-        Icons.print_disabled_rounded,
-      );
-    }
-    if (d.rejected) {
-      return (AppColors.danger, context.tr('ڕەفز'), Icons.cancel_rounded);
-    }
-    if (d.hasArrived) {
-      return (AppColors.blue, context.tr('گەیشت'), Icons.outbox_rounded);
-    }
-    return (_pendingYellow, context.tr('نەگەیشت'), Icons.schedule_rounded);
   }
 
   String _formatSentTime(String iso) {
     final dt = DateTime.tryParse(iso);
     if (dt == null) return iso;
     final local = dt.toLocal();
-    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    return '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// ناوی پرێنتەر(ەکان) بۆ یەک ئایتم.
+  ///
+  /// ئەگەر پرێنتەرێک شکستی هێنابێت، ئەو پرێنتەرانە پیشان دەدرێن کە هێشتا
+  /// تیکەتیان دەوێت؛ ئەگەر نا، پرێنتەرە تەرخانکراوەکان لە ڕێکخستنی خۆجێیی
+  /// ئەم ئامێرەوە دەخوێنرێنەوە (وەک ئەوەی ئەم ئامێرە خۆی دەیچاپەڕێژێت).
+  String _printerLabelForItem(DeliveryItemStatus it) {
+    final failed = it.failedPrinterTypes;
+    if (failed.isNotEmpty) {
+      return failed.map(_printerLabel).join(' · ');
+    }
+    final router = PrintRouter(ref.read(printerProvider));
+    final types = router.resolvePrintersForItem(
+      OrderItem(id: it.id, name: it.name, price: 0, category: it.category),
+    );
+    if (types.isEmpty) return '';
+    return types.map((t) => _printerLabel(t.index)).join(' · ');
+  }
+
+  String _printerLabel(int typeIndex) {
+    if (typeIndex == PrinterType.kitchen.index) return context.tr('چێشتخانە');
+    if (typeIndex == PrinterType.bar.index) return context.tr('باڕ');
+    if (typeIndex == PrinterType.cashier.index) return context.tr('پرێنتی کاشێر');
+    if (typeIndex == PrinterType.hookah.index) return context.tr('ژووری نێرگیلە');
+    return context.tr('چێشتخانە');
   }
 }

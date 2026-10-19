@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../core/app_log.dart';
 import '../core/app_prefs.dart';
@@ -441,8 +442,10 @@ Future<String?> startSyncServer(
   if (previousServer != null) {
     await previousServer.stopAndReleasePort();
     previousServer.discovery.dispose();
-    previousServer.discovery.dispose();
   }
+  // This device no longer serves as the hub while a fresh server is starting;
+  // [isHub] is set again below once the listener is up.
+  db.isHub = false;
   if (!keepClient) {
     _client?.dispose();
     _client = null;
@@ -564,6 +567,7 @@ Future<String?> startSyncServer(
     if (ip != null) {
       NetworkGuardService.instance.setExpectedServerIp(ip);
     }
+    db.isHub = true;
     if (!registryOnly) {
       // Catch up any ticket that was owed while the app was closed or the
       // printer was off, then keep sweeping so a printer that comes back is
@@ -629,6 +633,7 @@ PrintJob _decodePrintJob(int printerType, Map<String, dynamic> payload) {
         tableNumber: (m['tableNumber'] as num?)?.toInt() ?? 0,
         tableLabel: m['tableLabel'] as String? ?? '',
         price: (m['price'] as num?)?.toDouble() ?? 0,
+        itemId: m['itemId'] as String? ?? '',
       );
     }).toList(),
     printerType: PrinterType.values[printerType],
@@ -649,22 +654,132 @@ Future<PrintJobResult> _dispatchJob(PrintJob job) async {
   return PrintRouter.dispatchPrintJob(job);
 }
 
+Future<void> dispatchOrderPrintJobs(
+  LocalDatabase db,
+  List<PrintJob> jobs, {
+  required int tableId,
+  String? batchId,
+}) async {
+  if (jobs.isEmpty) return;
+  final id = batchId ?? const Uuid().v4();
+  for (final job in jobs) {
+    final itemIds = job.items.map((e) => e.itemId).where((s) => s.isNotEmpty).toList();
+    final payloadMap = <String, dynamic>{
+      'items': job.items.map((m) => {
+            'name': m.name,
+            'quantity': m.quantity,
+            'category': m.category,
+            'notes': m.notes,
+            'waiterName': m.waiterName,
+            'tableNumber': m.tableNumber,
+            'tableLabel': m.tableLabel,
+            'price': m.price,
+            'itemId': m.itemId,
+          }).toList(),
+      'printerName': job.printerName,
+      'printerPort': job.printerPort,
+      'tableId': tableId,
+    };
+    final payload = jsonEncode(payloadMap);
+    final claimed = await db.claimPrintJob(
+      batchId: id,
+      printerType: job.printerType.index,
+      tableId: tableId,
+      payload: payload,
+    );
+    if (!claimed) continue;
+    final result = await _dispatchJob(job);
+    await db.completePrintJob(
+      id,
+      job.printerType.index,
+      success: result.success,
+      error: result.error ?? '',
+    );
+    if (itemIds.isNotEmpty) {
+      await db.stampItemPrintResult(tableId, itemIds, job.printerType.index, success: result.success);
+      // Only a SUCCESS may cancel older outstanding tickets for this table: a
+      // newer ticket that came out means the older ones are dead. A failure
+      // must keep its ledger row so the retry sweep can try again.
+      if (result.success) {
+        await db.supersedePrintJobs(tableId);
+      }
+    }
+    _broadcastPrintStatus(
+      batchId: id,
+      tableId: tableId,
+      printed: result.success,
+      printerType: job.printerType.index,
+      itemIds: itemIds,
+    );
+  }
+}
+
 void _broadcastPrintStatus({
   required String batchId,
   required int tableId,
   required bool printed,
+  int? printerType,
+  List<String>? itemIds,
 }) {
+  final data = <String, dynamic>{
+    'batchId': batchId,
+    'tableId': tableId,
+    'printed': printed,
+  };
+  if (printerType != null) data['printerType'] = printerType;
+  if (itemIds != null && itemIds.isNotEmpty) data['itemIds'] = itemIds;
+
   final server = _server;
-  if (server == null || !server.isRunning) return;
-  server.broadcast(
-    SyncMessage(
-      type: 'print_status',
-      action: 'print_status',
-      data: {'batchId': batchId, 'tableId': tableId, 'printed': printed},
-      userId: 0,
-      role: 'server',
-    ),
-  );
+  if (server != null && server.isRunning) {
+    server.broadcast(
+      SyncMessage(
+        type: 'print_status',
+        action: 'print_status',
+        data: data,
+        userId: 0,
+        role: 'server',
+      ),
+    );
+    return;
+  }
+  final client = _client;
+  if (client != null && client.isConnected) {
+    client.send(
+      SyncMessage(
+        type: 'print_status',
+        action: 'print_status',
+        data: data,
+        userId: 0,
+        role: 'client',
+      ),
+    );
+  }
+}
+
+/// Applies a `print_status` result to the local database.
+///
+/// When the message names the printer and the dishes, the per-dish stamps are
+/// updated (and every assigned printer must have done its part for a dish to
+/// count as printed). An older message that carries neither falls back to the
+/// table-level flag, exactly as before.
+Future<void> _applyPrintStatusMessage(
+  LocalDatabase db,
+  Map<String, dynamic> data,
+) async {
+  final tableId = data['tableId'] as int? ?? 0;
+  if (tableId <= 0) return;
+  final printed = data['printed'] == true;
+  final printerType = (data['printerType'] as num?)?.toInt();
+  final itemIds = (data['itemIds'] as List?)?.map((e) => '$e').toList() ?? const [];
+  if (printerType != null && itemIds.isNotEmpty) {
+    await db.stampItemPrintResult(tableId, itemIds, printerType, success: printed);
+  } else {
+    if (printed) {
+      await db.markOrderPrinted(tableId);
+    } else {
+      await db.markOrderPrintFailed(tableId);
+    }
+  }
 }
 
 /// Re-attempts every ticket the ledger still owes: a print that failed while
@@ -722,10 +837,16 @@ Future<void> resumePendingPrints(LocalDatabase db) async {
         success: result.success,
         error: result.error ?? '',
       );
+      final itemIds = job.items.map((e) => e.itemId).where((s) => s.isNotEmpty).toList();
+      if (itemIds.isNotEmpty) {
+        await db.stampItemPrintResult(tableId, itemIds, printerType, success: result.success);
+      }
       _broadcastPrintStatus(
         batchId: batchId,
         tableId: tableId,
         printed: result.success,
+        printerType: printerType,
+        itemIds: itemIds,
       );
     }
   } catch (e) {
@@ -975,6 +1096,10 @@ Future<bool> connectToServer(
         // stay stuck until a fresh discovery round-trip.
         setupConnection();
         _flushPendingSync(db, userId, role);
+        if (_printerConfig != null) {
+          unawaited(resumePendingPrints(db));
+          _startPrintRetryTimer(db);
+        }
       }
     } else {
       wasConnected = false;
@@ -1049,6 +1174,10 @@ void startAutoDiscovery(
       // onAutoDiscovered, so without this, orders queued while the cashier was
       // logged out would stay stuck forever.
       _flushPendingSync(db, userId, role);
+      if (_printerConfig != null) {
+        unawaited(resumePendingPrints(db));
+        _startPrintRetryTimer(db);
+      }
       // Remember the address that actually answered, so the next cold start
       // dials the live cashier directly instead of spending its first attempt
       // on a stale stored address. Only a real client learns this: the owner's
@@ -1102,6 +1231,7 @@ void startAutoDiscovery(
 void disconnectSync([LocalDatabase? db]) {
   if (db != null) {
     db.onMutation = null;
+    db.isHub = false;
   }
   _ownerPeerActive = false;
   _registrySeen.clear();
@@ -1194,6 +1324,7 @@ void stopOwnerPeerSync([LocalDatabase? db]) {
   }
   if (db != null && _server == null) {
     db.onMutation = null;
+    db.isHub = false;
   }
 }
 
@@ -1316,6 +1447,7 @@ void logoutKeepServerRunning([LocalDatabase? db]) {
   }
   if (_server == null && db != null) {
     db.onMutation = null;
+    db.isHub = false;
   }
 }
 
@@ -1497,6 +1629,10 @@ Future<void> _flushPendingSync(
 }
 
 Future<bool> _handleServerMutation(LocalDatabase db, SyncMessage msg) async {
+  if (msg.type == 'print_status') {
+    await _applyPrintStatusMessage(db, msg.data);
+    return true;
+  }
   if (msg.type != 'mutation') return true;
   if (msg.action.startsWith('TABLE_LOCK_')) {
     await _safeHandleLockMutation(db, msg);
@@ -1549,6 +1685,12 @@ Future<void> _handleClientMutation(
         ack.originalAction == 'addOrderItem' ||
         ack.originalAction == 'batchAddOrderItems') {
       await db.markOrderArrived(ack.tableId, rejected: ack.rejected);
+      if (!ack.rejected) {
+        await db.markOrderItemsArrived(
+          ack.tableId,
+          ack.itemIds.isEmpty ? null : ack.itemIds,
+        );
+      }
       if (ack.printed) {
         await db.markOrderPrinted(ack.tableId);
       }
@@ -1564,19 +1706,11 @@ Future<void> _handleClientMutation(
     // The server applies an order, acks it, and prints separately. This is the
     // second half of that split: the print either reached the kitchen or it did
     // not, and the captain's chip has to say which.
-    final tableId = msg.data['tableId'] as int? ?? 0;
-    final printed = msg.data['printed'] == true;
-    if (tableId > 0) {
-      try {
-        if (printed) {
-          await db.markOrderPrinted(tableId);
-        } else {
-          await db.markOrderPrintFailed(tableId);
-        }
-        onSyncDataApplied?.call();
-      } catch (e) {
-        appLog('[SyncProvider] print_status apply error: $e');
-      }
+    try {
+      await _applyPrintStatusMessage(db, msg.data);
+      onSyncDataApplied?.call();
+    } catch (e) {
+      appLog('[SyncProvider] print_status apply error: $e');
     }
     return;
   }

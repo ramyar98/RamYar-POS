@@ -496,17 +496,36 @@ class _WaiterHomePageState extends ConsumerState<WaiterHomePage>
     return Consumer(
       builder: (context, ref, _) {
         final deliveryAsync = ref.watch(deliveryStatusProvider);
-        final deliveries = deliveryAsync.asData?.value ?? const <OrderDeliveryModel>[];
-        final waiting = deliveries.where((d) => !d.hasArrived && !d.rejected).length;
-        final rejected = deliveries.where((d) => d.rejected).length;
+        final deliveries =
+            deliveryAsync.asData?.value ?? const <OrderDeliveryModel>[];
+        // Item-aware: the badge counts the dishes still on their way (not yet
+        // confirmed by the till) plus the rejected ones - the captain's real
+        // backlog. Legacy rows with no dishes fall back to the table count.
+        var pendingItems = 0;
+        var rejectedDishes = 0;
+        for (final d in deliveries) {
+          if (d.rejected) {
+            rejectedDishes += d.items.isEmpty ? 1 : d.itemTotal;
+            continue;
+          }
+          if (d.items.isEmpty) {
+            if (!d.hasArrived) pendingItems++;
+            continue;
+          }
+          pendingItems += d.pendingItems.length;
+        }
+        final count = pendingItems + rejectedDishes;
         return IconButton(
-          tooltip: context.tr('گەیشت'),
+          tooltip: context.tr('دۆخی ناردنی داواکاری'),
           onPressed: _openDeliveryPage,
           icon: Badge(
-            isLabelVisible: waiting + rejected > 0,
+            isLabelVisible: count > 0,
             backgroundColor: AppColors.primary,
-            label: Text('${waiting + rejected}'),
-            child: const Icon(Icons.mark_email_read_rounded, color: AppColors.primary),
+            label: Text('$count'),
+            child: const Icon(
+              Icons.mark_email_read_rounded,
+              color: AppColors.primary,
+            ),
           ),
         );
       },
@@ -604,26 +623,42 @@ class _WaiterHomePageState extends ConsumerState<WaiterHomePage>
     final tablesAsync = ref.watch(waiterProvider);
     final isPhone = Responsive.isPhone(context);
     final addTableButton = isPhone
-        ? IconButton(
-            onPressed: _showAddTableDialog,
-            icon: const Icon(Icons.add_rounded, color: AppColors.primary),
-            tooltip: context.tr('زیادکردنی مێز'),
+        ? Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [AppColors.primary, Color(0xFF0C856B)],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            constraints: const BoxConstraints(minHeight: 36, minWidth: 40),
+            child: IconButton(
+              onPressed: _showAddTableDialog,
+              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+              tooltip: context.tr('زیادکردنی مێز'),
+              padding: EdgeInsets.zero,
+            ),
           )
-        : FilledButton.icon(
-            onPressed: _showAddTableDialog,
-            icon: const Icon(Icons.add, size: 16),
-            label: Text(context.tr('زیادکردنی مێز'), style: const TextStyle(fontSize: 12)),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              visualDensity: VisualDensity.compact,
-              // 44px floor: the old Size.zero + vertical:2 made a ~22px target
-              // in the AppBar - easy to miss with a thumb and below every
-              // platform's tap-target guideline.
-              minimumSize: const Size(0, 44),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        : Container(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [AppColors.primary, Color(0xFF0C856B)],
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            constraints: const BoxConstraints(minHeight: 36, minWidth: 0),
+            child: TextButton.icon(
+              onPressed: _showAddTableDialog,
+              icon: const Icon(Icons.add, size: 15, color: Colors.white),
+              label: Text(context.tr('زیادکردنی مێز'),
+                  style: const TextStyle(fontSize: 11.5, color: Colors.white, fontWeight: FontWeight.w600)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
           );
 

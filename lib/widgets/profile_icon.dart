@@ -25,7 +25,7 @@ class ProfileIcon extends StatelessWidget {
     if (user == null) return const SizedBox.shrink();
     final initial = user!.name.isNotEmpty ? user!.name[0] : '?';
     final roleLabels = {
-      UserRole.waiter: context.tr('وەیتەر'),
+      UserRole.waiter: context.tr('کاپتن'),
       UserRole.cashier: context.tr('کاشێر'),
       UserRole.admin: context.tr('ئادمێن'),
       UserRole.owner: context.tr('خاوەن سیستەم'),

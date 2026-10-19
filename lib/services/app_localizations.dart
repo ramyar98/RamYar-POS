@@ -4742,6 +4742,56 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.english: 'Cake',
     AppLanguage.turkish: 'Kek',
   },
+  // ===== Order delivery (item-level) =====
+  'چێشتخانە': {
+    AppLanguage.badini: 'چێشتخانە',
+    AppLanguage.arabic: 'المطبخ',
+    AppLanguage.persian: 'آشپزخانه',
+    AppLanguage.english: 'Kitchen',
+    AppLanguage.turkish: 'Mutfak',
+  },
+  'پرێنتی کاشێر': {
+    AppLanguage.badini: 'پرێنتی کاشێری',
+    AppLanguage.arabic: 'طابعة الكاشير',
+    AppLanguage.persian: 'چاپگر صندوق',
+    AppLanguage.english: 'Cashier printer',
+    AppLanguage.turkish: 'Kasa yazıcısı',
+  },
+  'ژووری نێرگیلە': {
+    AppLanguage.badini: 'ژوورا نێرگیلەیێ',
+    AppLanguage.arabic: 'غرفة الأركيلة',
+    AppLanguage.persian: 'اتاق قلیان',
+    AppLanguage.english: 'Hookah room',
+    AppLanguage.turkish: 'Nargile odası',
+  },
+  'پرێنت نەکراوە': {
+    AppLanguage.badini: 'پرێنت نەکریە',
+    AppLanguage.arabic: 'لم يُطبع',
+    AppLanguage.persian: 'چاپ نشده',
+    AppLanguage.english: 'Not printed',
+    AppLanguage.turkish: 'Yazdırılmadı',
+  },
+  'هیچ ئایتیمێک نەدۆزرایەوە': {
+    AppLanguage.badini: 'چ ئایتیم نەهاتنە دیتن',
+    AppLanguage.arabic: 'لم يتم العثور على أي عنصر',
+    AppLanguage.persian: 'هیچ آیتمی یافت نشد',
+    AppLanguage.english: 'No items found',
+    AppLanguage.turkish: 'Hiç öğe bulunamadı',
+  },
+  'هەڵە لە دووبارە ناردن': {
+    AppLanguage.badini: 'خەلەتی د دووبارە هنارتنێ دا',
+    AppLanguage.arabic: 'خطأ في إعادة الإرسال',
+    AppLanguage.persian: 'خطا در ارسال مجدد',
+    AppLanguage.english: 'Error resending',
+    AppLanguage.turkish: 'Yeniden gönderme hatası',
+  },
+  'هەڵە لە پرێنت': {
+    AppLanguage.badini: 'خەلەتی د پرێنتکرنێ دا',
+    AppLanguage.arabic: 'خطأ في الطباعة',
+    AppLanguage.persian: 'خطا در چاپ',
+    AppLanguage.english: 'Error printing',
+    AppLanguage.turkish: 'Yazdırma hatası',
+  },
 };
 
 /// Every translatable UI string, keyed by the Kurdish (Sorani) source text.

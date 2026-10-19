@@ -124,6 +124,7 @@ class PrintJobItem {
   final String tableLabel;
 
   final double price;
+  final String itemId;
 
   const PrintJobItem({
     required this.name,
@@ -134,5 +135,6 @@ class PrintJobItem {
     this.tableNumber = 0,
     this.tableLabel = '',
     this.price = 0.0,
+    this.itemId = '',
   });
 }

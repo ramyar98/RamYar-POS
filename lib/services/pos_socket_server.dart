@@ -385,6 +385,19 @@ class PosSocketServer {
       );
     }
     if (session == null) return;
+    final origData = originalMsg.data;
+    final List<String> itemIds = (() {
+      final out = <String>[];
+      final items = origData['items'];
+      if (items is List) {
+        for (final e in items) {
+          if (e is Map && e['id'] is String) out.add(e['id'] as String);
+        }
+      }
+      final item = origData['item'];
+      if (item is Map && item['id'] is String) out.add(item['id'] as String);
+      return out;
+    })();
     final ack = AckMessage(
       originalAction: originalMsg.action,
       success: success,
@@ -392,7 +405,8 @@ class PosSocketServer {
       tableId: tableId,
       rejected: rejected,
       error: error,
-      localId: (originalMsg.data['localId'] as num?)?.toInt(),
+      localId: (origData['localId'] as num?)?.toInt(),
+      itemIds: itemIds,
     ).toSyncMessage(userId, role);
     try {
       session.socket.add(ack.encode());

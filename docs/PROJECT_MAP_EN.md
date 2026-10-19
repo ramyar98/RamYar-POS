@@ -317,19 +317,28 @@ cashier. Locks the table while open so nobody else can open it.
 
 #### C. Order delivery status (waiter) — `lib/page/waiter/order_delivery_page.dart`
 
-**What it is:** A live “postbox” showing the status of every order the waiter
-sent: waiting for connection (queued), arrived at the cashier, printed, or
-rejected.
+**What it is:** A live “postbox” showing, **per dish**, two truths: did this dish
+reach the cashier system, and did this dish's ticket come out of *every* printer
+it is assigned to (kitchen, bar, cashier printer, hookah room)?
 
-**Role:** waiter only.
+**Role:** captain / waiter only.
 
 - **Refresh button** — reloads the list — app bar.
 - **Connection banner** — yellow “{n} orders waiting for connection” when
   disconnected; green “Sync is active (سینک چالاکە)” when connected.
-- **Legend chips** — Waiting (yellow) / Arrived (blue) / Printed (green) /
-  Rejected (red).
-- **Order cards** — “Table {n}, Sent - time”, status badge per card; **tap** the
-  card to open that table's order screen.
+- **Item-level filters** — “All (هەموو)”, “Arrived (گەیشت)”, “Not arrived
+  (نەگەیشت)”, “Printed (پرێنت)”, “Reprint (دوبارە پرێنت)”, each showing a
+  **dish count**. Arrived/Not-arrived = per-dish confirmation from the till;
+  Printed/Reprint = per-dish ticket state. Any dish that still owes a ticket
+  appears under “Reprint”.
+- **Legend chips** — Waiting (yellow) / Arrived (blue) / Reprint (yellow) /
+  Printed (green) / Rejected (red).
+- **Order cards** — “Table {n}, Sent - time”, a status badge, a per-dish
+  `arrived/total` and `printed/total` summary, and one row per dish with its
+  printer label, arrival icon and print icon. A dish still owing a ticket has a
+  one-tap **reprint** button. A card-level button reprints the unprinted dishes
+  (or re-sends the whole order when nothing arrived). **Tap** the card to open
+  that table's order screen.
 - **Live:** updates every 5 seconds.
 
 #### D. Waiter settings — `lib/page/waiter/waiter_settings_page.dart`
@@ -802,7 +811,7 @@ These small pieces appear inside many screens:
 |---|---|
 | `users` | staff accounts: name, 5-digit PIN, role, IP access code, table range/assignment |
 | `tables` | restaurant tables: number/name, status, guests, seated time, totals |
-| `order_items` | items on a table's open order |
+| `order_items` | items on a table's open order, each with its own arrival (`syncedAt`) and print (`printedAt`, `failedPrinters`) stamps |
 | `settled_orders` / `settled_order_items` | paid bills (by table/cashier) |
 | `cashier_shifts` | cashier shifts: start/end time, declared cash |
 | `debts` | table debts |

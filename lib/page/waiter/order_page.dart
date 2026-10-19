@@ -4,15 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/colors.dart';
 import '../../core/constants.dart';
+import '../../database/local_db.dart';
+import '../../models/order_model.dart';
+import '../../models/printer_model.dart';
 import '../../providers/waiter_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/printer_provider.dart';
 import '../../services/app_localizations.dart';
 import '../../services/print_router.dart';
+import '../../services/sync_provider.dart';
 import '../../widgets/print_preview_dialog.dart';
-import '../../database/local_db.dart';
-import '../../models/printer_model.dart';
-import '../../models/order_model.dart';
 
 class OrderPage extends ConsumerStatefulWidget {
   final int tableNumber;
@@ -38,9 +39,8 @@ class _OrderPageState extends ConsumerState<OrderPage> {
     if (jobs.isEmpty) return;
     final confirmed = await PrintPreview.showAllJobsPreview(context, jobs);
     if (confirmed) {
-      for (final job in jobs) {
-        unawaited(PrintRouter.dispatchPrintJob(job));
-      }
+      await dispatchOrderPrintJobs(ref.read(localDbProvider), jobs,
+          tableId: widget.tableNumber);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

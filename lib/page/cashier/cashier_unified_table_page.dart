@@ -24,6 +24,7 @@ import '../../services/app_localizations.dart';
 import '../../services/esc_pos_builder.dart';
 import '../../services/menu_helper.dart';
 import '../../services/print_router.dart';
+import '../../services/sync_provider.dart';
 import '../../services/table_lock_controller.dart';
 import '../../services/table_note_policy.dart';
 import '../../widgets/cash_calculator_dialog.dart';
@@ -325,8 +326,9 @@ class _CashierUnifiedTablePageState
         tableNumber: widget.tableNumber,
         tableLabel: _printLabel(null),
       );
-      for (final job in jobs) {
-        unawaited(PrintRouter.dispatchPrintJob(job));
+      if (jobs.isNotEmpty) {
+        unawaited(dispatchOrderPrintJobs(ref.read(localDbProvider), jobs,
+            tableId: widget.tableNumber));
       }
     }
     setState(() => _pendingItems.clear());

@@ -188,7 +188,7 @@ pubspec.yaml (٦٩)  |  analysis_options.yaml (٢٥)  |  README.md (١١)
 - **`cancelled_item_model.dart`**: `CancelledItem` (id, shiftId, tableId, tableName, itemName, itemPrice, quantity, category, cancelledAt, cancelledBy, cancelledByName, status, servedAt).
 - **`printer_model.dart`**: `PrinterConfig` (id, name, portName, printerType, isDefault) + `PrinterType` enum `kitchen/bar/hookah/cashier` + `PrintJob`/`PrintJobItem` + `DiscoveredPrinter`.
 - **`menu_model.dart`**: `FoodCategory` + `FoodItem` (هەردووکیان ٥ زمان: name/name_ar/name_fa/name_en/name_tr).
-- **`order_delivery_model.dart`**: `OrderDeliveryModel` (tableId, sentAt, arrivedAt, printedAt, rejected).
+- **`order_delivery_model.dart`**: `OrderDeliveryModel` (tableId, sentAt, arrivedAt, printedAt, rejected) + `DeliveryItemStatus` (id, name, quantity, category, syncedAt, printedAt, failedPrinters). پەڕەی گەیشتن بە ئاستی **ئایتم** کار دەکات: گەیشت/نەگەیشت = ئایا ئەم خواردنە گەیشتووەتە سیستەمی کاشێر؟ پرێنت/دوبارە پرێنت = ئایا تیکەتی ئەم خواردنە لە **هەموو** پرێنتەرە تەرخانکراوەکانی دەرچووە؟ `OrderDeliveryModel` یاریدەدەری وەک `items/arrivedItemCount/printedItemCount/pendingItems/unprintedItems/allItemsArrived/allItemsPrinted/anyItemPrintFailed/itemStatusLabel` هەیە.
 - **`table_notification_model.dart`**: `TableNotification` (id, tableId, openedAt).
 - **`table_lock_model.dart`**: `TableLock` (tableId, deviceId, userId, userName, role, lockedAt, heartbeat).
 
@@ -196,7 +196,7 @@ pubspec.yaml (٦٩)  |  analysis_options.yaml (٢٥)  |  README.md (١١)
 
 ## ٥. داتابەیس (Database) — `local_db.dart` (٢٢١٩ ڕیزی)
 
-نوێترین وەشانی schema: **v29**. هەر مایگریشنێک لە `_onCreate` + `_onUpgrade`ـدا. `resetForTesting()` بۆ تێست داتابەیسەکە دادەخات.
+نوێترین وەشانی schema: **v46**. هەر مایگریشنێک لە `_onCreate` + `_onUpgrade`ـدا. `resetForTesting()` بۆ تێست داتابەیسەکە دادەخات.
 
 ### ٥.١ هەموو تابلێکەکان (TableSchema) — ستوونەکان بە وردی
 
@@ -205,7 +205,7 @@ pubspec.yaml (٦٩)  |  analysis_options.yaml (٢٥)  |  README.md (١١)
 Migrations: v2 guestCount، v3 sentToCashier، v5/v7 printedAt، v17 note، v20 createdBy.
 
 **٢. `order_items`** — ئیتەمەکانی مێز (PK = `(id, tableId)` واتە id خودى UUIDیە):
-`id TEXT NOT NULL`, `tableId INTEGER NOT NULL`, `name TEXT NOT NULL`, `price REAL NOT NULL`, `quantity INTEGER DEFAULT 1`, `category TEXT DEFAULT ''`, `createdAt TEXT NOT NULL`, `waiterName TEXT DEFAULT '' (v17)`.
+`id TEXT NOT NULL`, `tableId INTEGER NOT NULL`, `name TEXT NOT NULL`, `price REAL NOT NULL`, `quantity INTEGER DEFAULT 1`, `category TEXT DEFAULT ''`, `createdAt TEXT NOT NULL`, `waiterName TEXT DEFAULT '' (v17)`, `waiterRole INTEGER DEFAULT -1`, `syncedAt TEXT DEFAULT '' (v46 – گەیشتنە لای کاشێر)`, `printedAt TEXT DEFAULT '' (v46 – یەکەم تیکەتی سەرکەوتوو)`, `failedPrinters TEXT DEFAULT '' (v46 – CSV ی ئیندێکسی پرێنتەرەکان کە هێشتا تیکەتیان دەوێت؛ تەنها کاتێک ئایتم «پرێنت کراوە» ژمێردرێت کە هەموو پرێنتەرە تەرخانکراوەکان تیکەتیان دابێت)`.
 
 **٣. `users`** — بەکارهێنەران:
 `id INTEGER PK AUTOINCREMENT`, `name TEXT NOT NULL`, `pin TEXT NOT NULL UNIQUE`, `role INTEGER NOT NULL (UserRole)`, `rangeStart INTEGER (v24)`, `rangeEnd INTEGER (v24)`, `accessCode TEXT DEFAULT '' (v29)`.
@@ -272,7 +272,8 @@ Seed: ٤١ خواردن بە نرخەکانیان (بەرگەری گۆشتی ٥�
 
 ### ٥.٢ Methodە گرنگەکانی `LocalDatabase`
 - **Tables**: `getAllTables/getTable/occupyTable/freeTable/requestBill/deleteTable/markAsPrinted/markOverdue/renameTable/updateTableNote/setTablePaid/updateTableStatus/isTableIdTaken/isTableNameTaken/addTable`.
-- **Orders**: `getOrderItems/addOrderItem/batchSendAndOccupy/batchSendAndOccupyPending/addItemToOrder/removeOrderItem/updateOrderItemQuantity/transferItems/transferSingleItem/mergeTables/replaceTableItems/clearOrderItems/markOrderArrived/markOrderPrinted/markOrderRejected/clearSyncedOrders/getPendingOrders`.
+- **Orders**: `getOrderItems/addOrderItem/batchSendAndOccupy/batchSendAndOccupyPending/addItemToOrder/removeOrderItem/updateOrderItemQuantity/transferItems/transferSingleItem/mergeTables/replaceTableItems/clearOrderItems/markOrderArrived/markOrderItemsArrived/markOrderPrinted/markOrderPrintFailed/markOrderRejected/clearSyncedOrders/getPendingOrders`.
+- **چاپی ئاستی ئایتم (v46)**: `stampItemPrintResult(tableId, itemIds, printerType, success)` — مۆری گەیشتن/پرێنتی هەر ئایتمێک دەنووسێت (سەرکەوتوو ئەندامێکی `failedPrinters` لادەبەرێت و `printedAt` دادەنێت؛ شکستهێنان ئەندامەکە زیاد دەکات)، پاشان `refreshDeliveryPrintState(tableId)` دۆخی ئاستی مێز نوێ دەکاتەوە. `supersedePrintJobs(tableId)` تەنها دوای **سەرکەوتن** تیکەتە کۆنەکان دەکوژێنێتەوە. `getOrderDeliveries()` هەر ئۆردەرێک بە ئایتمەکانییەوە دەگەڕێنێت.
 - **Settle**: `settleTable(tableId, total, discountPercent, discountAmount, userId, shiftId, paymentMethod)` — مێزەکە empty دەکات، لیستی ئیتەمەکان بۆ `settled_orders` + `settled_order_items` تۆمار دەکات، `totalCollected`ی شەفت زیاد دەکات.
 - **Shift**: `startShift/closeShift/getActiveShift/getAllShifts/getSettledOrdersByShiftId/getShiftExpenses/getShiftTotals`.
 - **Cashier**: `addCashierExpense/getCashierExpenses`.
@@ -307,8 +308,8 @@ Seed: ٤١ خواردن بە نرخەکانیان (بەرگەری گۆشتی ٥�
 
 ### ٦.٢ Messageەکان (`sync_types.dart`)
 - **`SyncMessage`**: `{ type, action, data (Map), userId, role, timestamp (ISO8601) }` — بە JSON دەنێردرێت.
-- **`Type`ەکان**: `client_info`، `ping`، `pong`، `snapshot`، `mutation`، `ack`، `auth_reject`.
-- **`AckMessage`**: `{ originalAction, success, printed, tableId, rejected, error, timestamp }` — server بۆ کڵاینتی سەرچاوە دەنێرێتەوە دوای apply.
+- **`Type`ەکان**: `client_info`، `ping`، `pong`، `snapshot`، `mutation`، `ack`، `auth_reject`، `print_status`.
+- **`AckMessage`**: `{ originalAction, success, printed, tableId, rejected, error, timestamp, itemIds }` — server بۆ کڵاینتی سەرچاوە دەنێرێتەوە دوای apply. `itemIds` = ئەو ئایتمانەی ئەم ackە دەیگرێتەوە (بۆ مۆری `syncedAt`ی هەر خواردنێک).
 - `SyncConnectionQuality`: excellent/good/poor/disconnected.
 
 ### ٦.٣ کۆرس/flowی پەیوەندی
@@ -322,9 +323,9 @@ Seed: ٤١ خواردن بە نرخەکانیان (بەرگەری گۆشتی ٥�
    - سەرکەوتوو → sessionـەکە بە userId/role نوێ دەکرێتەوە + **snapshot** (stateی تەواو) بۆ ئەو کڵاینته دەنێردرێت (`onSnapshotRequest = db.buildSnapshot`).
 4. **mutation لە کڵاینت → سێرڤێر**:
    - سێرڤێر بۆ **هەموو ئەوانی تر** بڵاوی دەکاتەوە (`_broadcastToOthers`).
-   - بۆ سەرچاوە: `onMutationProcessed` → `_handleServerMutation` → `_applyMutation` (لە داتابەیس)؛ ئەگەر action = `batchSendAndOccupy`/`addOrderItem` و سەرکەوتوو بوو → **چاپی kitchen ticket** (`_printerService.printOrder`).
-   - `sendAckToOrigin` بۆ کڵاینتەکە (success/printed/rejected).
-5. **مۆحاش ← کڵاینت**: `snapshot` → `db.applySnapshot` + `onSyncDataApplied?.call()` (UI تازە دەکاتەوە). `ack` → `markOrderArrived/rejected`، `markOrderPrinted` ئەگەر printed، `markSyncedMatching`، `clearSyncedOrders`، `state.setAck`.
+   - بۆ سەرچاوە: `onMutationProcessed` → `_handleServerMutation` → `_applyMutation` (لە داتابەیس). **چاپ خۆکار نییە** — چاپ تەنها بە دەستی لە پەڕەکانەوە بە `dispatchOrderPrintJobs(db, jobs, tableId:)` دەکرێت (claim → dispatch → complete → stamp → broadcast).
+   - `sendAckToOrigin` بۆ کڵاینتەکە (success/printed/rejected + `itemIds` ئەگەر ئۆردەرەکە ئایتمی هەبوو).
+5. **مۆحاش ← کڵاینت**: `snapshot` → `db.applySnapshot` + `onSyncDataApplied?.call()` (UI تازە دەکاتەوە). `ack` → `markOrderArrived/rejected` + `markOrderItemsArrived(tableId, ack.itemIds)` (مۆری `syncedAt`ی ئایتمەکان؛ بەتاڵ = fallback دروست بۆ هەموو ئایتمەکان)، `markSyncedMatching`، `clearSyncedOrders`، `state.setAck`. `print_status` (نوێ) هەردوو ئاراستەدا دەگوازرێتەوە و `_applyPrintStatusMessage` دەیخوێنێتەوە (printerType + itemIds).
 6. **TABLE_LOCK_***: mutationی قوفل بۆ هەمووان بڵاودەکرێتەوە (نە مێژوو apply ناکرێت)، `lockTable/unlockTable/updateLockHeartbeat`.
 
 ### ٦.٤ هەموو actionەکانی mutation

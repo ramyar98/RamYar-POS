@@ -85,6 +85,7 @@ class AckMessage {
   /// offline queue. Lets the client mark exactly that row synced only after
   /// the server confirms receipt (no blind 100ms mark-synced).
   final int? localId;
+  final List<String> itemIds;
   final DateTime timestamp;
 
   AckMessage({
@@ -95,6 +96,7 @@ class AckMessage {
     this.rejected = false,
     this.error,
     this.localId,
+    this.itemIds = const [],
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now();
 
@@ -106,6 +108,7 @@ class AckMessage {
         'rejected': rejected,
         if (error != null) 'error': error,
         if (localId != null) 'localId': localId,
+        if (itemIds.isNotEmpty) 'itemIds': itemIds,
         'timestamp': timestamp.toIso8601String(),
       };
 
@@ -117,6 +120,7 @@ class AckMessage {
         rejected: json['rejected'] as bool? ?? false,
         error: json['error'] as String?,
         localId: (json['localId'] as num?)?.toInt(),
+        itemIds: (json['itemIds'] as List?)?.map((e) => '$e').toList() ?? const [],
         timestamp: DateTime.parse(json['timestamp'] as String),
       );
 

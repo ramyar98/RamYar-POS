@@ -112,7 +112,7 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
   Future<void> _endShift() async {
     if (_shiftBusy || _activeShift == null) return;
     final db = ref.read(localDbProvider);
-    final shiftExpenses = await db.getShiftExpensesTotal(_activeShift!.id);
+    final totals = await db.getShiftExpenseTotals(_activeShift!.id);
     if (!mounted) return;
     setState(() => _shiftBusy = true);
     try {
@@ -120,7 +120,9 @@ class _CashierWelcomePageState extends ConsumerState<CashierWelcomePage> {
         context: context,
         builder: (_) => CloseShiftDialog(
           startedAt: _activeShift!.startedAt,
-          shiftExpenses: shiftExpenses,
+          shiftExpenses: totals.net,
+          expensesOut: totals.out,
+          expensesBack: totals.back,
         ),
       );
       if (result != null && mounted) {

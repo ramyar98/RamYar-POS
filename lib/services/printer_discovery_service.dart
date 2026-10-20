@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
 import 'dart:math';
@@ -72,46 +73,27 @@ class PrinterDiscoveryService {
 
   static List<Map<String, dynamic>> _parseJsonList(String raw) {
     try {
-      final List<dynamic> decoded = _jsonDecode(raw);
-      return decoded.cast<Map<String, dynamic>>();
+      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+      return decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
     } catch (_) {
+      // The real decoder failed (a PowerShell warning line ahead of the JSON,
+      // say). Fall back to the tolerant line scanner.
       return _fallbackParse(raw);
     }
   }
 
   static Map<String, dynamic> _parseJsonObject(String raw) {
     try {
-      return _jsonDecode(raw) as Map<String, dynamic>;
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
     } catch (_) {
-      return {};
+      // Fall through to the tolerant scanner below.
     }
-  }
-
-  static dynamic _jsonDecode(String raw) {
-    return _parseSimpleJson(raw);
-  }
-
-  static dynamic _parseSimpleJson(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.startsWith('[')) {
-      final result = <Map<String, dynamic>>[];
-      final objects = trimmed.split('}\n{');
-      for (final obj in objects) {
-        final clean = obj.replaceAll('[', '').replaceAll(']', '').replaceAll('{', '').replaceAll('}', '');
-        final map = <String, dynamic>{};
-        for (final line in clean.split('\n')) {
-          final parts = line.split(':');
-          if (parts.length >= 2) {
-            final key = parts[0].trim().replaceAll('"', '');
-            final value = parts.sublist(1).join(':').trim().replaceAll('"', '');
-            map[key] = value;
-          }
-        }
-        if (map.isNotEmpty) result.add(map);
-      }
-      return result;
-    }
-    return {};
+    final list = _fallbackParse(raw);
+    return list.isEmpty ? {} : list.first;
   }
 
   static List<Map<String, dynamic>> _fallbackParse(String raw) {

@@ -537,11 +537,15 @@ void main() {
       );
       // The cashier's close-shift dialog: a label row next to a FittedBox
       // amount, plus a "net" row that only appears once an amount is typed.
+      // The split figures are supplied so the "taken out" and "returned" rows
+      // are both laid out here too - they must not overflow at this size.
       await _visitTypedDialog(
         tester,
         CloseShiftDialog(
           startedAt: DateTime.now().toIso8601String(),
-          shiftExpenses: 25000,
+          shiftExpenses: 0,
+          expensesOut: 25000,
+          expensesBack: 25000,
         ),
         '500000',
       );

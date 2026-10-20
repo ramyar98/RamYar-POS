@@ -232,13 +232,15 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
     if (user == null) return;
     final db = ref.read(localDbProvider);
     if (_activeShift != null) {
-      final shiftExpenses = await db.getShiftExpensesTotal(_activeShift!.id);
+      final totals = await db.getShiftExpenseTotals(_activeShift!.id);
       if (!mounted) return;
       final result = await showDialog<CloseShiftResult>(
         context: context,
         builder: (_) => CloseShiftDialog(
           startedAt: _activeShift!.startedAt,
-          shiftExpenses: shiftExpenses,
+          shiftExpenses: totals.net,
+          expensesOut: totals.out,
+          expensesBack: totals.back,
         ),
       );
       if (result != null) {

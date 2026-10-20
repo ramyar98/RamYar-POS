@@ -12,12 +12,22 @@ class CloseShiftResult {
 
 class CloseShiftDialog extends StatefulWidget {
   final String startedAt;
+
+  /// Net effect of the shift's expense ledger (money out minus money put back).
+  /// Kept as the fallback when the split figures are not supplied.
   final double shiftExpenses;
+
+  /// Gross amounts, when the caller has them. Optional so a bare
+  /// `shiftExpenses` figure still works (and so old tests keep passing).
+  final double? expensesOut;
+  final double? expensesBack;
 
   const CloseShiftDialog({
     super.key,
     required this.startedAt,
     required this.shiftExpenses,
+    this.expensesOut,
+    this.expensesBack,
   });
 
   @override
@@ -56,6 +66,10 @@ class _CloseShiftDialogState extends State<CloseShiftDialog> {
     final collected = _parseCollected(_collectedCtrl.text);
     final collectedValid = collected >= 0;
     final net = collectedValid ? collected - widget.shiftExpenses : 0;
+    // Gross figures when the caller supplied them; otherwise the whole ledger
+    // is shown as "taken out" (the old behaviour) so nothing is hidden.
+    final out = widget.expensesOut ?? widget.shiftExpenses;
+    final back = widget.expensesBack ?? 0;
     return AlertDialog(
       title: Text(context.tr('داخستنی شەفت')),
       content: SingleChildScrollView(
@@ -71,31 +85,19 @@ class _CloseShiftDialogState extends State<CloseShiftDialog> {
               }),
             ),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Text(
-                    context.tr('کۆی خەرجیەکان'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: AppColors.danger),
-                  ),
-                ),
-                Flexible(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '${context.tr('د.ع')} ${money(widget.shiftExpenses)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.danger,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            _amountRow(
+              label: context.tr('خەرجییە دەرکراوەکان'),
+              value: out,
+              color: AppColors.danger,
             ),
+            if (back > 0) ...[
+              const SizedBox(height: 8),
+              _amountRow(
+                label: context.tr('گەڕانەوەی خەرجی'),
+                value: back,
+                color: AppColors.blue,
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: _collectedCtrl,
@@ -165,6 +167,38 @@ class _CloseShiftDialogState extends State<CloseShiftDialog> {
             Navigator.pop(context, CloseShiftResult(value));
           },
           child: Text(context.tr('داخستن')),
+        ),
+      ],
+    );
+  }
+
+  /// A label on the right and its amount on the left, both shrink-wrapped so a
+  /// long translation or a six-figure amount never overflows the dialog.
+  Widget _amountRow({
+    required String label,
+    required double value,
+    required Color color,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              '${context.tr('د.ع')} ${money(value)}',
+              style: TextStyle(fontWeight: FontWeight.bold, color: color),
+            ),
+          ),
         ),
       ],
     );

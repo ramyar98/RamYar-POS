@@ -265,6 +265,15 @@ void main() {
     expect(rows.where((r) => (r['price'] as num) > 0).length, 1);
     expect(rows.where((r) => (r['price'] as num) < 0).length, 1);
 
+    // 4. The net is zero, but the two directions are NOT lost: the close-shift
+    //    dialog and the admin report must both still see 20,000 out and 20,000
+    //    back. A single net figure under «کۆی خەرجیەکان» used to read as "no
+    //    expenses were recorded at all" - a lie the cashier could not check.
+    final totals = await db.getShiftExpenseTotals(shiftId);
+    expect(totals.out, 20000);
+    expect(totals.back, 20000);
+    expect(totals.net, 0);
+
     await finish(tester);
   });
 

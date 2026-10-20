@@ -3134,6 +3134,13 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.english: 'Total expenses',
     AppLanguage.turkish: 'Toplam giderler',
   },
+  'خەرجییە دەرکراوەکان': {
+    AppLanguage.badini: 'خەرجییە دەرکراوەکان',
+    AppLanguage.arabic: 'المصروفات المسحوبة',
+    AppLanguage.persian: 'هزینه‌های برداشت‌شده',
+    AppLanguage.english: 'Expenses taken out',
+    AppLanguage.turkish: 'Çıkarılan giderler',
+  },
 
   // ===== Cashier =====
   'کۆی پارەی کۆکراوە (د.ع)': {

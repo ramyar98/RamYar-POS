@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../core/fmt.dart';
 import '../models/printer_model.dart';
 import '../models/receipt_design_model.dart';
 
@@ -66,19 +67,13 @@ class EscPosBuilder {
   static String _eq([int? w]) => '═' * (w ?? _lineW);
   static String _dot([int? w]) => '·' * (w ?? _lineW);
 
-  static String _fmtP(double p) {
-    final n = p.toInt().abs();
-    final s = n.toString();
-    final len = s.length;
-    if (len <= 3) return s;
-    final sb = StringBuffer();
-    for (var i = 0; i < len; i++) {
-      sb.write(s[i]);
-      final remaining = len - 1 - i;
-      if (remaining > 0 && remaining % 3 == 0) sb.write(',');
-    }
-    return sb.toString();
-  }
+  /// Whole-dinar formatting for the printed slip.
+  ///
+  /// This used to be a hand-rolled copy of [money] (same thousands separators,
+  /// written out again here). One formatter means the paper and the screen can
+  /// never drift apart, and the printed slip keeps the app's convention of an
+  /// unsigned magnitude - callers add the leading '-' where a minus is wanted.
+  static String _fmtP(double p) => money(p.abs());
 
   static String _typeTitle(PrinterType t) {
     switch (t) {

@@ -5486,6 +5486,36 @@ class LocalDatabase {
     return (result.first['total'] as num).toDouble();
   }
 
+  /// The three numbers a shift close actually needs, in one query.
+  ///
+  /// The ledger holds both directions in one table: money taken out of the till
+  /// is stored positive and money put back negative. Showing a single net
+  /// figure under the heading «کۆی خەرجیەکان» ("total expenses") lied to the
+  /// cashier - a shift that took out 50,000 and returned all 50,000 read as
+  /// "0" and looked like nothing had been recorded, while the admin report for
+  /// the same shift listed an expense of 50,000 and a return of 50,000. Both
+  /// figures are returned here so the close dialog can show them side by side,
+  /// exactly as the admin report does, and the net stays available for the
+  /// drawer calculation (collected - net).
+  Future<({double out, double back, double net})> getShiftExpenseTotals(
+    int shiftId,
+  ) async {
+    final result = await db.rawQuery(
+      'SELECT '
+      'COALESCE(SUM(CASE WHEN price > 0 THEN price ELSE 0 END), 0) as out, '
+      'COALESCE(SUM(CASE WHEN price < 0 THEN -price ELSE 0 END), 0) as back, '
+      'COALESCE(SUM(price), 0) as net '
+      'FROM cashier_expenses WHERE shiftId = ?',
+      [shiftId],
+    );
+    final row = result.first;
+    return (
+      out: (row['out'] as num).toDouble(),
+      back: (row['back'] as num).toDouble(),
+      net: (row['net'] as num).toDouble(),
+    );
+  }
+
   // ==================== Food Menu ====================
 
   Future<List<Map<String, dynamic>>> getFoodCategories() async {

@@ -27,20 +27,43 @@ class _AdminBackupPageState extends ConsumerState<AdminBackupPage> {
 
   Future<void> _loadBackups() async {
     setState(() => _loading = true);
-    _backups = await ref.read(localDbProvider).listBackups();
-    if (mounted) setState(() => _loading = false);
+    try {
+      _backups = await ref.read(localDbProvider).listBackups();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە')),
+              backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   Future<void> _exportBackup() async {
+    if (_exporting) return;
     setState(() => _exporting = true);
-    final path = await ref.read(localDbProvider).exportBackup();
-    await _loadBackups();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.trp('بەکاپ کرایە: {name}', {'name': path.split('\\').last.split('/').last})),
-          backgroundColor: AppColors.success),
-    );
-    setState(() => _exporting = false);
+    try {
+      final path = await ref.read(localDbProvider).exportBackup();
+      await _loadBackups();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.trp('بەکاپ کرایە: {name}', {'name': path.split('\\').last.split('/').last})),
+            backgroundColor: AppColors.success),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە')),
+              backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      // Without this a thrown export left the spinner and the disabled button
+      // on screen for the rest of the session, with no way to try again.
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   Future<void> _restoreBackup(Map<String, dynamic> backup) async {
@@ -57,16 +80,27 @@ class _AdminBackupPageState extends ConsumerState<AdminBackupPage> {
       ),
     );
     if (confirm == true) {
+      if (_restoring) return;
       setState(() => _restoring = true);
-      final db = ref.read(localDbProvider);
-      await db.restoreBackup(backup['path'] as String);
-      await _loadBackups();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr('بەکاپ بە سەرکەوتووی گەڕایەوە')),
-            backgroundColor: AppColors.success),
-      );
-      setState(() => _restoring = false);
+      try {
+        final db = ref.read(localDbProvider);
+        await db.restoreBackup(backup['path'] as String);
+        await _loadBackups();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('بەکاپ بە سەرکەوتووی گەڕایەوە')),
+              backgroundColor: AppColors.success),
+        );
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە')),
+                backgroundColor: AppColors.danger),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _restoring = false);
+      }
     }
   }
 
@@ -87,15 +121,26 @@ class _AdminBackupPageState extends ConsumerState<AdminBackupPage> {
       ),
     );
     if (confirm != true || !mounted) return;
+    if (_resetting) return;
     setState(() => _resetting = true);
-    await ref.read(localDbProvider).resetAllData();
-    await _loadBackups();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.tr('هەموو داتاکان سڕانەوە و بۆ دۆخە سەرەتاییەکە گەڕایەوە')),
-          backgroundColor: AppColors.success),
-    );
-    setState(() => _resetting = false);
+    try {
+      await ref.read(localDbProvider).resetAllData();
+      await _loadBackups();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('هەموو داتاکان سڕانەوە و بۆ دۆخە سەرەتاییەکە گەڕایەوە')),
+            backgroundColor: AppColors.success),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە')),
+              backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _resetting = false);
+    }
   }
 
   String _formatSize(int bytes) {
@@ -334,7 +379,14 @@ class _AdminBackupPageState extends ConsumerState<AdminBackupPage> {
                 if (_loading)
                   const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()))
                 else if (_backups.isEmpty)
-                  const SizedBox(height: 120, child: SizedBox.shrink())
+                  // Show the real empty state: it used to render nothing at all,
+                  // so a phone/tablet admin saw a blank gap where «هیچ بەکاپێک
+                  // نییە» should explain why there is no list.
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: AppConstants.paddingMedium),
+                    child: SizedBox(height: 160, child: empty),
+                  )
                 else
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),

@@ -59,6 +59,18 @@ class _AdminShiftsPageState extends ConsumerState<AdminShiftsPage> {
           return FutureBuilder<List<CashierShift>>(
             future: ref.read(localDbProvider).getAllShifts(),
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text(
+                    context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە'),
+                    style: const TextStyle(color: AppColors.softText),
+                  ),
+                );
+              }
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
               final shifts = snapshot.data ?? [];
               if (shifts.isEmpty) {
                 return Center(
@@ -215,26 +227,86 @@ class _ShiftCard extends ConsumerWidget {
   }
 }
 
-class _ComparisonIndicator extends ConsumerWidget {
+class _ComparisonIndicator extends ConsumerStatefulWidget {
   final CashierShift shift;
   const _ComparisonIndicator({required this.shift});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return FutureBuilder<double>(
-      future: ref
+  ConsumerState<_ComparisonIndicator> createState() =>
+      _ComparisonIndicatorState();
+}
+
+class _ComparisonIndicatorState extends ConsumerState<_ComparisonIndicator> {
+  /// Created once per shift instead of on every build: the parent list rebuilds
+  /// on every shift revision, and an inline future re-ran the SUM query for
+  /// every visible row each time.
+  late Future<double> _systemTotal;
+
+  @override
+  void initState() {
+    super.initState();
+    _systemTotal = ref
+        .read(localDbProvider)
+        .getSettledCashLikeTotalByShiftId(widget.shift.id);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ComparisonIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.shift.id != widget.shift.id ||
+        oldWidget.shift.totalCollected != widget.shift.totalCollected) {
+      _systemTotal = ref
           .read(localDbProvider)
-          .getSettledCashLikeTotalByShiftId(shift.id),
+          .getSettledCashLikeTotalByShiftId(widget.shift.id);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<double>(
+      future: _systemTotal,
       builder: (context, snapshot) {
-        final systemTotal = snapshot.data ?? 0;
-        final diff = shift.totalCollected - systemTotal;
+        // Never draw a difference from a missing number: while the SUM is in
+        // flight (or after it failed) a default of 0 made every closed shift
+        // look like the cashier came up short.
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return Container(
+            height: 64,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە'),
+              style: const TextStyle(color: AppColors.softText, fontSize: 13),
+            ),
+          );
+        }
+        final systemTotal = snapshot.data!;
+        final diff = widget.shift.totalCollected - systemTotal;
 
         Color color;
         IconData icon;
-        if (shift.totalCollected == systemTotal) {
+        if (widget.shift.totalCollected == systemTotal) {
           color = AppColors.success;
           icon = Icons.check_circle_rounded;
-        } else if (shift.totalCollected > systemTotal) {
+        } else if (widget.shift.totalCollected > systemTotal) {
           color = const Color(0xFFFFA000);
           icon = Icons.trending_up_rounded;
         } else {
@@ -260,7 +332,7 @@ class _ComparisonIndicator extends ConsumerWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '${context.tr('کاشێر')}: ${context.tr('د.ع')} ${money(shift.totalCollected)}',
+                      '${context.tr('کاشێر')}: ${context.tr('د.ع')} ${money(widget.shift.totalCollected)}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(

@@ -168,25 +168,35 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
         title: Text(
           context.trp('مێزی {tableName}', {'tableName': order.tableName}),
         ),
-        content: SizedBox(
-          width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.person_rounded,
-                    size: 14,
-                    color: AppColors.softText,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    cashierName,
-                    style: TextStyle(color: AppColors.softText, fontSize: 13),
-                  ),
-                ],
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            // A fixed 400 overflowed inside a 320-360px phone's dialog.
+            maxWidth: 400,
+            maxHeight: MediaQuery.of(ctx).size.height * 0.6,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.person_rounded,
+                      size: 14,
+                      color: AppColors.softText,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        cashierName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            color: AppColors.softText, fontSize: 13),
+                      ),
+                    ),
+                  ],
               ),
               const SizedBox(height: 4),
               Text(
@@ -249,6 +259,7 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                 ),
               ],
             ],
+            ),
           ),
         ),
         actions: [

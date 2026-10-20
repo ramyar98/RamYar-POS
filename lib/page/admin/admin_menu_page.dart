@@ -96,6 +96,7 @@ class _AdminMenuPageState extends ConsumerState<AdminMenuPage> {
     if (!_printerMode) {
       final db = ref.read(localDbProvider);
       final assignments = await db.getAllItemPrinterAssignments();
+      if (!mounted) return;
       setState(() {
         _printerAssignments = assignments;
         _selectedItems.clear();

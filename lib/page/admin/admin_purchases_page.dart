@@ -105,24 +105,38 @@ class _AdminPurchasesPageState extends ConsumerState<AdminPurchasesPage> {
   }
 
   Future<void> _addPurchase() async {
+    if (_isAdding) return;
     final name = _itemController.text.trim();
     final price = parseAmount(_priceController.text).toDouble();
     if (name.isEmpty || price <= 0) return;
     setState(() => _isAdding = true);
-    final db = ref.read(localDbProvider);
-    final user = ref.read(authProvider);
-    await db.addPurchase(
-      Purchase(
-        itemName: name,
-        price: price,
-        purchasedAt: DateTime.now().toIso8601String(),
-        purchasedBy: user?.id ?? 0,
-      ),
-    );
-    _itemController.clear();
-    _priceController.clear();
-    setState(() => _isAdding = false);
-    await _load();
+    try {
+      final db = ref.read(localDbProvider);
+      final user = ref.read(authProvider);
+      await db.addPurchase(
+        Purchase(
+          itemName: name,
+          price: price,
+          purchasedAt: DateTime.now().toIso8601String(),
+          purchasedBy: user?.id ?? 0,
+        ),
+      );
+      if (!mounted) return;
+      _itemController.clear();
+      _priceController.clear();
+      await _load();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('هەڵەیەک ڕوویدا لە زیادکردندا')),
+              backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      // One failed write used to leave the Add button disabled for the rest of
+      // the session, with nothing on screen to say why.
+      if (mounted) setState(() => _isAdding = false);
+    }
   }
 
   @override

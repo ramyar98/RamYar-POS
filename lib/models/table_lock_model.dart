@@ -48,14 +48,25 @@ class TableLock {
       };
 
   factory TableLock.fromMap(Map<String, dynamic> map) => TableLock(
-        tableId: map['tableId'] as int,
-        deviceId: map['deviceId'] as String,
-        userId: map['userId'] as int,
-        userName: map['userName'] as String,
-        role: map['role'] as String,
-        lockedAt: DateTime.parse(map['lockedAt'] as String),
-        heartbeat: DateTime.parse(map['heartbeat'] as String),
+        tableId: (map['tableId'] as num?)?.toInt() ?? 0,
+        deviceId: map['deviceId'] as String? ?? '',
+        userId: (map['userId'] as num?)?.toInt() ?? 0,
+        userName: map['userName'] as String? ?? '',
+        role: map['role'] as String? ?? '',
+        // A corrupt/empty timestamp must not throw: an unparseable heartbeat is
+        // treated as epoch, which reads as expired, so one bad row can never
+        // keep a table locked forever or crash the page that opens it.
+        lockedAt: _parseOrEpoch(map['lockedAt']),
+        heartbeat: _parseOrEpoch(map['heartbeat']),
       );
+
+  static DateTime _parseOrEpoch(Object? value) {
+    if (value is String) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
 
   Map<String, dynamic> toJson() => {
         'tableId': tableId,
@@ -68,13 +79,13 @@ class TableLock {
       };
 
   factory TableLock.fromJson(Map<String, dynamic> json) => TableLock(
-        tableId: json['tableId'] as int,
-        deviceId: json['deviceId'] as String,
-        userId: json['userId'] as int,
-        userName: json['userName'] as String,
-        role: json['role'] as String,
-        lockedAt: DateTime.parse(json['lockedAt'] as String),
-        heartbeat: DateTime.parse(json['heartbeat'] as String),
+        tableId: (json['tableId'] as num?)?.toInt() ?? 0,
+        deviceId: json['deviceId'] as String? ?? '',
+        userId: (json['userId'] as num?)?.toInt() ?? 0,
+        userName: json['userName'] as String? ?? '',
+        role: json['role'] as String? ?? '',
+        lockedAt: _parseOrEpoch(json['lockedAt']),
+        heartbeat: _parseOrEpoch(json['heartbeat']),
       );
 
   TableLock copyWith({DateTime? heartbeat}) => TableLock(

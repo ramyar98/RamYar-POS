@@ -54,15 +54,18 @@ class TableModel {
 
   String get formattedSeatedTime {
     if (seatedTime.isEmpty) return '';
+    // Guard the tail length: a hand-edited/legacy row like "2026-01-01T9" used
+    // to throw RangeError from substring(0, 5) and blank the whole table card.
+    String hhmm(String tail) => tail.length >= 5 ? tail.substring(0, 5) : tail;
     if (seatedTime.contains('T')) {
       final parts = seatedTime.split('T');
-      return parts[1].substring(0, 5);
+      return hhmm(parts[1]);
     }
     if (seatedTime.contains(' ')) {
       final parts = seatedTime.split(' ');
-      return parts[1].substring(0, 5);
+      return hhmm(parts[1]);
     }
-    return seatedTime.length >= 5 ? seatedTime.substring(0, 5) : seatedTime;
+    return hhmm(seatedTime);
   }
 
   DateTime? _seatedDateTime() {

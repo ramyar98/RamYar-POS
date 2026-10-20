@@ -115,6 +115,7 @@ class _AdminFoodFilterPageState extends ConsumerState<AdminFoodFilterPage> {
       final db = ref.read(localDbProvider);
       await db.setItemPrinterAssignments(itemName, types);
       final assignments = await db.getAllItemPrinterAssignments();
+      if (!mounted) return;
       setState(() => _assignments = assignments);
     }
   }

@@ -28,11 +28,20 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
   /// Debt ids whose settle write is currently in flight.
   final Set<int> _settlingIds = <int>{};
 
+  /// The debt query, created once and re-created on a revision bump instead of
+  /// on every build. An inline future restarted the query on each rebuild, so
+  /// the page flickered through "no debts" while a settle was completing.
+  late Future<List<DebtModel>> _debtsFuture;
+
   @override
   void initState() {
     super.initState();
+    _debtsFuture = ref.read(localDbProvider).getDebts();
     _revisionListener = () {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      setState(() {
+        _debtsFuture = ref.read(localDbProvider).getDebts();
+      });
     };
     final db = ref.read(localDbProvider);
     db.shiftsRevision.addListener(_revisionListener);
@@ -76,6 +85,7 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
     );
     if (confirm == true) {
       await ref.read(localDbProvider).deleteDebt(debt.id);
+      if (!mounted) return;
       setState(() {});
     }
   }
@@ -187,8 +197,20 @@ class _AdminDebtsPageState extends ConsumerState<AdminDebtsPage> {
           ),
           Expanded(
             child: FutureBuilder<List<DebtModel>>(
-              future: ref.read(localDbProvider).getDebts(),
+              future: _debtsFuture,
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە'),
+                      style: const TextStyle(color: AppColors.softText),
+                    ),
+                  );
+                }
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
                 final allDebts = snapshot.data ?? [];
                 final debts = allDebts.where((d) {
                   final dt = DateTime.tryParse(d.createdAt);

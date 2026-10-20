@@ -7,6 +7,9 @@ import 'digits.dart';
 /// amounts keep their minus sign ("-5,000"), and anything under a thousand is
 /// returned untouched.
 String money(num value) {
+  // A broken calculation must never take a screen down: num.toInt() throws on
+  // NaN and Infinity, so those print as 0 instead.
+  if (value is double && !value.isFinite) return '0';
   final digits = value.toInt().abs().toString();
   final buffer = StringBuffer();
   for (var i = 0; i < digits.length; i++) {
@@ -25,5 +28,7 @@ String money(num value) {
 int parseAmount(String text) {
   final digits = toLatinDigits(text).replaceAll(RegExp(r'[^0-9]'), '');
   if (digits.isEmpty) return 0;
-  return int.parse(digits);
+  // tryParse instead of parse: a paste of 25+ digits overflowed int64 and threw
+  // FormatException straight out of an onChanged handler.
+  return int.tryParse(digits) ?? 0;
 }

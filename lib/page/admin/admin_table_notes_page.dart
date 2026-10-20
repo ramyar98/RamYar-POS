@@ -105,8 +105,16 @@ class _AdminTableNotesPageState extends ConsumerState<AdminTableNotesPage> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (!snapshot.hasData) {
-            return Center(child: Text(context.tr('هیچ زانیاریەک نییە')));
+          if (snapshot.hasError || !snapshot.hasData) {
+            // A failed query is not an empty result: showing "no information"
+            // hid real data errors behind the normal empty state.
+            return Center(
+              child: Text(
+                context.tr(snapshot.hasError
+                    ? 'هەڵەیەک ڕوویدا لە خوێندنەوە'
+                    : 'هیچ زانیاریەک نییە'),
+              ),
+            );
           }
           final notes = snapshot.data!;
           if (notes.isEmpty) {

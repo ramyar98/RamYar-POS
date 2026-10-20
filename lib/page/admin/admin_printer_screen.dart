@@ -18,6 +18,8 @@ class AdminPrinterScreen extends ConsumerStatefulWidget {
 
 class _AdminPrinterScreenState extends ConsumerState<AdminPrinterScreen> {
   bool _isScanning = false;
+  /// Guards the delete+add pair in the assign dialog against a double tap.
+  bool _assigning = false;
   List<DiscoveredPrinter> _discovered = [];
 
   @override
@@ -27,13 +29,24 @@ class _AdminPrinterScreenState extends ConsumerState<AdminPrinterScreen> {
   }
 
   Future<void> _scanPrinters() async {
+    if (_isScanning) return;
     setState(() => _isScanning = true);
-    final printers = await PrinterDiscoveryService.discoverPrinters();
-    if (!mounted) return;
-    setState(() {
-      _discovered = printers;
-      _isScanning = false;
-    });
+    try {
+      final printers = await PrinterDiscoveryService.discoverPrinters();
+      if (!mounted) return;
+      setState(() => _discovered = printers);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە')),
+              backgroundColor: AppColors.danger),
+        );
+      }
+    } finally {
+      // A thrown scan used to leave the spinner and the disabled button up for
+      // good, so the admin could never rescan.
+      if (mounted) setState(() => _isScanning = false);
+    }
   }
 
   void _assignPrinter(DiscoveredPrinter discovered, PrinterType type) {
@@ -49,17 +62,32 @@ class _AdminPrinterScreenState extends ConsumerState<AdminPrinterScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('ڕەتکردنەوە'))),
           FilledButton(onPressed: () async {
-            if (existing.isNotEmpty) {
-              await ref.read(printerProvider.notifier).deletePrinter(existing.first.id);
+            // Two quick taps used to run the delete+add pair twice, leaving the
+            // second add to overwrite the first mid-flight.
+            if (_assigning) return;
+            _assigning = true;
+            try {
+              if (existing.isNotEmpty) {
+                await ref.read(printerProvider.notifier).deletePrinter(existing.first.id);
+              }
+              await ref.read(printerProvider.notifier).addPrinter(PrinterConfig(
+                name: discovered.name,
+                portName: discovered.portName,
+                printerType: type,
+                isDefault: true,
+              ));
+              if (!ctx.mounted) return;
+              Navigator.pop(ctx);
+            } catch (_) {
+              if (ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  SnackBar(content: Text(ctx.tr('هەڵەیەک ڕوویدا لە زیادکردندا')),
+                      backgroundColor: AppColors.danger),
+                );
+              }
+            } finally {
+              _assigning = false;
             }
-            await ref.read(printerProvider.notifier).addPrinter(PrinterConfig(
-              name: discovered.name,
-              portName: discovered.portName,
-              printerType: type,
-              isDefault: true,
-            ));
-            if (!ctx.mounted) return;
-            Navigator.pop(ctx);
           }, child: Text(context.tr('دەستنیشانکردن'))),
         ],
       ),
@@ -94,9 +122,12 @@ class _AdminPrinterScreenState extends ConsumerState<AdminPrinterScreen> {
         builder: (context, setDialogState) => AlertDialog(
           title: Text(context.tr('نەخشەکێشانی پۆل بۆ چاپکەر')),
           content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
-            child: SizedBox(
-            width: 500,
+            constraints: BoxConstraints(
+              maxWidth: 500,
+              // Never wider than the dialog itself: a fixed 500 overflowed on a
+              // 320-360px phone.
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
+            ),
             child: ListView(
               shrinkWrap: true,
               children: categories.map((category) {
@@ -140,7 +171,6 @@ class _AdminPrinterScreenState extends ConsumerState<AdminPrinterScreen> {
               }).toList(),
             ),
           ),
-          ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('داخستن'))),
           ],
@@ -160,9 +190,10 @@ class _AdminPrinterScreenState extends ConsumerState<AdminPrinterScreen> {
         builder: (context, setDialogState) => AlertDialog(
           title: Text(context.tr('نەخشەکێشانی خواردن بۆ چاپکەر')),
           content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
-            child: SizedBox(
-            width: 500,
+            constraints: BoxConstraints(
+              maxWidth: 500,
+              maxHeight: MediaQuery.of(context).size.height * 0.6,
+            ),
             child: ListView(
               shrinkWrap: true,
               children: allItems.map((item) {
@@ -216,7 +247,6 @@ class _AdminPrinterScreenState extends ConsumerState<AdminPrinterScreen> {
                 );
               }).toList(),
             ),
-          ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('داخستن'))),

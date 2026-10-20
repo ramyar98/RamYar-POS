@@ -1,6 +1,7 @@
-import 'package:ramyar_pos/core/fmt.dart';
 import 'package:flutter/material.dart';
 import '../core/colors.dart';
+import '../core/digits.dart';
+import '../core/fmt.dart';
 import '../services/app_localizations.dart';
 import 'amount_input_formatter.dart';
 
@@ -33,22 +34,16 @@ class _CloseShiftDialogState extends State<CloseShiftDialog> {
     super.dispose();
   }
 
+  bool _closing = false;
+
   double _parseCollected(String text) {
-    final cleaned = text
-        .trim()
+    // One normaliser for every digit form (Arabic-Indic, Persian, fullwidth) -
+    // the hand-written ٠-٩ table here missed ۰-۹, so a Persian keyboard made
+    // every amount invalid.
+    final cleaned = toLatinDigits(text)
         .replaceAll(',', '')
         .replaceAll(' ', '')
-        .replaceAll('.', '')
-        .replaceAll('٠', '0')
-        .replaceAll('١', '1')
-        .replaceAll('٢', '2')
-        .replaceAll('٣', '3')
-        .replaceAll('٤', '4')
-        .replaceAll('٥', '5')
-        .replaceAll('٦', '6')
-        .replaceAll('٧', '7')
-        .replaceAll('٨', '8')
-        .replaceAll('٩', '9');
+        .replaceAll('.', '');
     final value = double.tryParse(cleaned);
     if (value == null || value.isNaN || value.isInfinite || value < 0) {
       return -1;
@@ -158,6 +153,7 @@ class _CloseShiftDialogState extends State<CloseShiftDialog> {
         ),
         FilledButton(
           onPressed: () {
+            if (_closing) return;
             final value = _parseCollected(_collectedCtrl.text);
             if (value < 0) {
               setState(
@@ -165,6 +161,7 @@ class _CloseShiftDialogState extends State<CloseShiftDialog> {
               );
               return;
             }
+            _closing = true;
             Navigator.pop(context, CloseShiftResult(value));
           },
           child: Text(context.tr('داخستن')),

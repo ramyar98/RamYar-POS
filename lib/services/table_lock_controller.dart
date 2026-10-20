@@ -98,10 +98,6 @@ class TableLockController {
     // control back to a still-running `acquire()`, whose insert can then land
     // after the row was removed - and the orphan that leaves behind looks to
     // every other captain exactly like a table somebody is working.
-    // The delete is issued before anything is awaited. An await in between hands
-    // control back to a still-running `acquire()`, whose insert can then land
-    // after the row was removed - and the orphan that leaves behind looks to
-    // every other captain exactly like a table somebody is working.
     final removed = db.unlockTable(tableId, deviceId);
     await _ejectionSub?.cancel();
     _ejectionSub = null;

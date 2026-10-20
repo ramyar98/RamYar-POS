@@ -124,7 +124,7 @@ class _ShiftPaymentMethodPageState
                 const SizedBox(height: 2),
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
+                  alignment: AlignmentDirectional.centerStart,
                   child: Text(
                     '${context.tr('د.ع')} ${money(total)}',
                     style: TextStyle(

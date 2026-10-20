@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/colors.dart';
 import '../../core/constants.dart';
+import '../../core/fmt.dart';
 import '../../database/local_db.dart';
 import '../../models/table_lock_model.dart';
 import '../../models/table_model.dart';
@@ -78,6 +79,10 @@ class _CashierTableHoldPageState extends ConsumerState<CashierTableHoldPage> {
   }
 
   void _back() {
+    // While the eject write is in flight the page must stay put: `_eject` pops
+    // `true` when it finishes, and if back had already popped the page that
+    // second pop closed the screen underneath it.
+    if (_ejecting) return;
     if (mounted) Navigator.of(context).pop(false);
   }
 
@@ -98,7 +103,7 @@ class _CashierTableHoldPageState extends ConsumerState<CashierTableHoldPage> {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back_rounded),
-            onPressed: _back,
+            onPressed: _ejecting ? null : _back,
             tooltip: context.tr('گەڕانەوە'),
           ),
           title: Text(context.tr('مێز بەسەردەستە'),
@@ -308,13 +313,10 @@ class _CashierTableHoldPageState extends ConsumerState<CashierTableHoldPage> {
   }
 
   String _money(double amount) {
-    final text = amount.toStringAsFixed(0);
-    final buffer = StringBuffer();
-    for (var i = 0; i < text.length; i++) {
-      if (i > 0 && (text.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(text[i]);
-    }
-    return '${buffer.toString()} IQD';
+    // Shared formatter + the same «د.ع» label every other screen uses. This used
+    // to hand-roll the thousands separators and append a hard-coded "IQD", so
+    // the bill total was the one label that never followed the app language.
+    return '${money(amount)} ${context.tr('د.ع')}';
   }
 
   Widget _actions() {

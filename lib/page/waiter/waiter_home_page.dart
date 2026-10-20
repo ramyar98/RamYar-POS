@@ -221,8 +221,11 @@ class _WaiterHomePageState extends ConsumerState<WaiterHomePage>
           ],
         ),
         content: SingleChildScrollView(
-          child: SizedBox(
-          width: 320,
+          // Constrained instead of a hard 320px: inside an AlertDialog on a
+          // 320dp phone the content box is only ~224dp, so the last guest tile
+          // was clipped off the edge and unreachable.
+          child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -361,9 +364,12 @@ class _WaiterHomePageState extends ConsumerState<WaiterHomePage>
         ],
       ),
     );
-    // Canceled (null) - do nothing. Invalid or empty input - warn the captain.
-    final parsed =
-        raw?.trim().isEmpty ?? true ? null : int.tryParse(raw!.trim());
+    // Cancelled (null) - do nothing at all. Backing out of the dialog used to
+    // fall into the "invalid number" branch below and flash a red error, which
+    // told the captain they had typed something wrong when they had typed
+    // nothing.
+    if (raw == null) return;
+    final parsed = raw.trim().isEmpty ? null : int.tryParse(raw.trim());
     if (parsed == null || parsed < 1) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

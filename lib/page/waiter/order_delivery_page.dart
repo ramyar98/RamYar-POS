@@ -155,6 +155,47 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
 
     final rejected = deliveries.where((d) => d.rejected).length;
 
+    // A failed read (or the very first frame) must not read as "nothing was
+    // sent": a captain who believes the list is simply empty re-sends food that
+    // already went to the kitchen.
+    if (deliveriesAsync.hasError) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          centerTitle: false,
+          title: Text(
+            context.tr('دۆخی ناردنی داواکاری'),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.darkText,
+            ),
+          ),
+          actions: [
+            IconButton(
+              tooltip: context.tr('نوێکردنەوە'),
+              onPressed: _refresh,
+              icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
+            ),
+          ],
+        ),
+        body: Center(
+          child: Text(
+            context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە'),
+            style: const TextStyle(color: AppColors.softText),
+          ),
+        ),
+      );
+    }
+    if (deliveriesAsync.isLoading && deliveries.isEmpty) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -688,12 +729,14 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
           const SizedBox(width: 8),
           _itemStatusIcons(it),
           if (it.needsPrint)
+            // 40px target: 30px was below the floor this app uses everywhere
+            // else, and this is the replay button a captain taps one-handed.
             SizedBox(
-              width: 30,
-              height: 30,
+              width: 40,
+              height: 40,
               child: IconButton(
                 padding: EdgeInsets.zero,
-                iconSize: 16,
+                iconSize: 18,
                 tooltip: context.tr('دوبارە پرێنت'),
                 onPressed: () => _reprintItems(d, [it]),
                 icon: const Icon(
@@ -776,7 +819,9 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
 
   String _formatSentTime(String iso) {
     final dt = DateTime.tryParse(iso);
-    if (dt == null) return iso;
+    // Never print a raw ISO string at the user: an unparseable timestamp used
+    // to be echoed verbatim onto the card.
+    if (dt == null) return '-';
     final local = dt.toLocal();
     return '${local.hour.toString().padLeft(2, '0')}:'
         '${local.minute.toString().padLeft(2, '0')}';

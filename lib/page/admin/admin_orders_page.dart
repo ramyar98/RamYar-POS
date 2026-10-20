@@ -542,11 +542,15 @@ class _AdminOrdersPageState extends ConsumerState<AdminOrdersPage> {
                                               color: AppColors.softText,
                                             ),
                                             const SizedBox(width: 4),
-                                            Text(
-                                              cashierName,
-                                              style: TextStyle(
-                                                color: AppColors.softText,
-                                                fontSize: 12,
+                                            Expanded(
+                                              child: Text(
+                                                cashierName,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: AppColors.softText,
+                                                  fontSize: 12,
+                                                ),
                                               ),
                                             ),
                                           ],

@@ -44,7 +44,7 @@ class _CashierCancelledItemsPageState
   String _timeAmPm(String iso) {
     if (iso.isEmpty) return '-';
     final dt = DateTime.tryParse(iso);
-    if (dt == null) return iso;
+    if (dt == null) return '-';
     String two(int n) => n.toString().padLeft(2, '0');
     final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
     final ap = dt.hour >= 12 ? context.tr('د.ن') : context.tr('پ.ن');
@@ -272,7 +272,22 @@ class _CashierCancelledItemsPageState
       ),
       body: RefreshIndicator(
         onRefresh: _reload,
-        child: async.isLoading
+        child: async.hasError
+            // A provider error is not "nothing was rejected": the cashier must
+            // not be told the list is empty when dishes were actually sent back.
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  const SizedBox(height: 120),
+                  Center(
+                    child: Text(
+                      context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە'),
+                      style: const TextStyle(color: AppColors.softText),
+                    ),
+                  ),
+                ],
+              )
+            : async.isLoading
             ? const Center(child: CircularProgressIndicator())
             : items.isEmpty
             ? ListView(

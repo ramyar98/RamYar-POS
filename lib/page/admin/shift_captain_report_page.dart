@@ -214,7 +214,7 @@ class ShiftCaptainReportViewState extends ConsumerState<ShiftCaptainReportView> 
                 const SizedBox(height: 2),
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
+                  alignment: AlignmentDirectional.centerStart,
                   child: Text(
                     '${context.tr('کۆی بڕ')}: ${context.tr('د.ع')} ${money(_totalAmount)}',
                     style: const TextStyle(
@@ -299,7 +299,7 @@ class ShiftCaptainReportViewState extends ConsumerState<ShiftCaptainReportView> 
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerStart,
               child: Text(
                 '${context.tr('د.ع')} ${money(row.amount)}',
                 style: TextStyle(

@@ -24,6 +24,11 @@ class _TransferPageState extends ConsumerState<TransferPage> {
   int? _selectedSourceId;
   int _filterIndex = 0;
 
+  /// True while the move is being written. Without it, tapping the destination
+  /// table twice ran `transferItems` twice and popped the route twice - the
+  /// second pop closed the table page underneath this one.
+  bool _transferring = false;
+
   /// A captain moves a table onto an empty one only: two occupied tables can
   /// never become one by their hand, because that merges two parties' food -
   /// a till decision. The page is shared with the cashier, who keeps the full
@@ -553,6 +558,7 @@ class _TransferPageState extends ConsumerState<TransferPage> {
     int targetId,
     String targetName,
   ) async {
+    if (_transferring) return;
     final db = ref.read(localDbProvider);
     final target = _isCaptain
         ? (ref.read(waiterProvider).asData?.value ?? const <TableModel>[])
@@ -563,23 +569,37 @@ class _TransferPageState extends ConsumerState<TransferPage> {
       _showCaptainMergeBlocked();
       return;
     }
-    await db.transferItems(sourceId, targetId);
-    ref.invalidate(tableOrdersProvider(sourceId));
-    ref.invalidate(tableOrdersProvider(targetId));
-    await ref.read(waiterProvider.notifier).refreshSilent();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          context.trp('گوازرایەوە بۆ {name}', {'name': targetName}),
+    _transferring = true;
+    try {
+      await db.transferItems(sourceId, targetId);
+      ref.invalidate(tableOrdersProvider(sourceId));
+      ref.invalidate(tableOrdersProvider(targetId));
+      await ref.read(waiterProvider.notifier).refreshSilent();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.trp('گوازرایەوە بۆ {name}', {'name': targetName}),
+          ),
+          backgroundColor: AppColors.success,
         ),
-        backgroundColor: AppColors.success,
-      ),
-    );
-    if (widget.sourceTableId != null) {
-      Navigator.of(context).pop(true);
-    } else {
-      setState(() => _selectedSourceId = null);
+      );
+      if (widget.sourceTableId != null) {
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() => _selectedSourceId = null);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('گوازدنەوە سەرکەوتوو نەبوو')),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } finally {
+      _transferring = false;
     }
   }
 }

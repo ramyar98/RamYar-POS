@@ -25,4 +25,49 @@ class MenuHelper {
       default: return Icons.restaurant;
     }
   }
+
+  /// A human-readable label for an icon key.
+  ///
+  /// The admin's icon dropdown used to render the raw key (`lunch_dining`,
+  /// `fastfood`, ...) as the visible text. Where the app already has a word for
+  /// the icon in all six languages we use it; otherwise the key is turned into
+  /// words («lunch_dining» -> «lunch dining») so at least no identifier leaks
+  /// into the UI.
+  static String labelForIcon(String name, String Function(String) tr) {
+    switch (name) {
+      case 'grid_view_rounded':
+        return tr('هەموو');
+      case 'lunch_dining':
+      case 'restaurant':
+      case 'set_meal':
+      case 'tapas':
+        return tr('خواردن');
+      case 'local_pizza':
+      case 'fastfood':
+        return tr('فاست فوود');
+      case 'kebab_dining':
+        return tr('برژاو');
+      case 'rice_bowl':
+        return tr('برنج');
+      case 'cake':
+      case 'bakery_dining':
+        return tr('کێک');
+      case 'local_drink':
+      case 'water_drop':
+        return tr('خواردنەوە');
+      case 'soup_kitchen':
+      case 'ramen_dining':
+        return tr('شۆربە');
+      case 'icecream':
+        return tr('ئایسکریم');
+      case 'coffee':
+        return tr('قاوە');
+      case 'egg':
+        return tr('هێلکە');
+      case 'eco':
+        return tr('سەوزە');
+      default:
+        return name.replaceAll('_', ' ');
+    }
+  }
 }

@@ -149,6 +149,16 @@ class _CashierPreviousOrdersPageState
       body: FutureBuilder<List<_TableSummary>>(
         future: _future,
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            // A failed query is not an empty history: falling through to the
+            // empty state told the cashier there was nothing to reprint.
+            return Center(
+              child: Text(
+                context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە'),
+                style: const TextStyle(color: AppColors.softText),
+              ),
+            );
+          }
           final summaries = snapshot.data ?? const <_TableSummary>[];
           if (snapshot.connectionState == ConnectionState.waiting &&
               summaries.isEmpty) {
@@ -451,6 +461,14 @@ class _CashierTableHistoryPageState
       body: FutureBuilder<List<_Visit>>(
         future: _future,
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە'),
+                style: const TextStyle(color: AppColors.softText),
+              ),
+            );
+          }
           final visits = snapshot.data ?? const <_Visit>[];
           if (snapshot.connectionState == ConnectionState.waiting &&
               visits.isEmpty) {

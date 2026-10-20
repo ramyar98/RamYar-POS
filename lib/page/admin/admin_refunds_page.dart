@@ -206,11 +206,15 @@ class _AdminRefundsPageState extends ConsumerState<AdminRefundsPage> {
                                   children: [
                                     Row(
                                       children: [
-                                        Text(
-                                          refund.itemName,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            color: AppColors.darkText,
+                                        Flexible(
+                                          child: Text(
+                                            refund.itemName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.darkText,
+                                            ),
                                           ),
                                         ),
                                         const SizedBox(width: 6),

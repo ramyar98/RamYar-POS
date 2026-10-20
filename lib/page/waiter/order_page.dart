@@ -24,7 +24,13 @@ class OrderPage extends ConsumerStatefulWidget {
 }
 
 class _OrderPageState extends ConsumerState<OrderPage> {
+  /// True while a print preview is open (or its dispatch is still running).
+  /// Both print buttons used to stay live, so a double tap opened two stacked
+  /// previews and confirming each sent the same dishes to the kitchen twice.
+  bool _printing = false;
+
   Future<void> _printKitchenTickets() async {
+    if (_printing) return;
     final printerState = ref.read(printerProvider);
     final router = PrintRouter(printerState);
     final user = ref.read(authProvider);
@@ -37,22 +43,28 @@ class _OrderPageState extends ConsumerState<OrderPage> {
       tableNumber: widget.tableNumber,
     );
     if (jobs.isEmpty) return;
-    final confirmed = await PrintPreview.showAllJobsPreview(context, jobs);
-    if (confirmed) {
-      await dispatchOrderPrintJobs(ref.read(localDbProvider), jobs,
-          tableId: widget.tableNumber);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.tr('بە سەرکەوتووی چاپکرا')),
-            backgroundColor: AppColors.success,
-          ),
-        );
+    _printing = true;
+    try {
+      final confirmed = await PrintPreview.showAllJobsPreview(context, jobs);
+      if (confirmed) {
+        await dispatchOrderPrintJobs(ref.read(localDbProvider), jobs,
+            tableId: widget.tableNumber);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr('بە سەرکەوتووی چاپکرا')),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
       }
+    } finally {
+      _printing = false;
     }
   }
 
   Future<void> _printReceipt(List<OrderItem> items, double total) async {
+    if (_printing) return;
     final printerState = ref.read(printerProvider);
     final cashierPrinter = printerState.printers
         .where((p) => p.printerType == PrinterType.cashier)
@@ -68,28 +80,16 @@ class _OrderPageState extends ConsumerState<OrderPage> {
       }
       return;
     }
-    final user = ref.read(authProvider);
-    final db = ref.read(localDbProvider);
-    final table = await db.getTable(widget.tableNumber);
-    final design = await db.getReceiptDesign();
-    if (!mounted) return;
-    final guestCount = table?.guestCount ?? 1;
-    final confirmed = await PrintPreview.showReceiptPreview(
-      context,
-      tableNumber: widget.tableNumber,
-      guestCount: guestCount,
-      items: items,
-      subtotal: total,
-      discountPercent: 0,
-      discountAmount: 0,
-      total: total,
-      waiterName: user?.name ?? '',
-      printerName: cashierPrinter.name,
-      design: design,
-    );
-    if (confirmed) {
-      await db.markAsPrinted(widget.tableNumber);
-      await PrintRouter.dispatchReceipt(
+    _printing = true;
+    try {
+      final user = ref.read(authProvider);
+      final db = ref.read(localDbProvider);
+      final table = await db.getTable(widget.tableNumber);
+      final design = await db.getReceiptDesign();
+      if (!mounted) return;
+      final guestCount = table?.guestCount ?? 1;
+      final confirmed = await PrintPreview.showReceiptPreview(
+        context,
         tableNumber: widget.tableNumber,
         guestCount: guestCount,
         items: items,
@@ -97,18 +97,35 @@ class _OrderPageState extends ConsumerState<OrderPage> {
         discountPercent: 0,
         discountAmount: 0,
         total: total,
-        printer: cashierPrinter,
         waiterName: user?.name ?? '',
+        printerName: cashierPrinter.name,
         design: design,
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(context.tr('بە سەرکەوتووی چاپکرا')),
-            backgroundColor: AppColors.success,
-          ),
+      if (confirmed) {
+        await db.markAsPrinted(widget.tableNumber);
+        await PrintRouter.dispatchReceipt(
+          tableNumber: widget.tableNumber,
+          guestCount: guestCount,
+          items: items,
+          subtotal: total,
+          discountPercent: 0,
+          discountAmount: 0,
+          total: total,
+          printer: cashierPrinter,
+          waiterName: user?.name ?? '',
+          design: design,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(context.tr('بە سەرکەوتووی چاپکرا')),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
       }
+    } finally {
+      _printing = false;
     }
   }
 
@@ -134,7 +151,7 @@ class _OrderPageState extends ConsumerState<OrderPage> {
           IconButton(
             icon: const Icon(Icons.print_rounded, color: AppColors.primary),
             tooltip: context.tr('چاپی خواردن'),
-            onPressed: () => _printKitchenTickets(),
+            onPressed: _printing ? null : () => _printKitchenTickets(),
           ),
         ],
       ),

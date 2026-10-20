@@ -430,7 +430,16 @@ class _AdminMenuPageState extends ConsumerState<AdminMenuPage> {
                               children: [
                                 Icon(MenuHelper.iconFromString(icon), size: 20),
                                 const SizedBox(width: 8),
-                                Text(icon),
+                                // Translated label, not the internal key: the
+                                // dropdown used to print «lunch_dining» and
+                                // «fastfood» straight at the admin.
+                                Expanded(
+                                  child: Text(
+                                    MenuHelper.labelForIcon(icon, context.tr),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -539,7 +548,16 @@ class _AdminMenuPageState extends ConsumerState<AdminMenuPage> {
                               children: [
                                 Icon(MenuHelper.iconFromString(icon), size: 20),
                                 const SizedBox(width: 8),
-                                Text(icon),
+                                // Translated label, not the internal key: the
+                                // dropdown used to print «lunch_dining» and
+                                // «fastfood» straight at the admin.
+                                Expanded(
+                                  child: Text(
+                                    MenuHelper.labelForIcon(icon, context.tr),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -704,7 +722,16 @@ class _AdminMenuPageState extends ConsumerState<AdminMenuPage> {
                               children: [
                                 Icon(MenuHelper.iconFromString(icon), size: 20),
                                 const SizedBox(width: 8),
-                                Text(icon),
+                                // Translated label, not the internal key: the
+                                // dropdown used to print «lunch_dining» and
+                                // «fastfood» straight at the admin.
+                                Expanded(
+                                  child: Text(
+                                    MenuHelper.labelForIcon(icon, context.tr),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -854,7 +881,16 @@ class _AdminMenuPageState extends ConsumerState<AdminMenuPage> {
                               children: [
                                 Icon(MenuHelper.iconFromString(icon), size: 20),
                                 const SizedBox(width: 8),
-                                Text(icon),
+                                // Translated label, not the internal key: the
+                                // dropdown used to print «lunch_dining» and
+                                // «fastfood» straight at the admin.
+                                Expanded(
+                                  child: Text(
+                                    MenuHelper.labelForIcon(icon, context.tr),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                               ],
                             ),
                           ),

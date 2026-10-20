@@ -180,7 +180,7 @@ class ShiftExpensesViewState extends ConsumerState<ShiftExpensesView> {
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerStart,
               child: Text(
                 '${context.tr('د.ع')} ${money(total)}',
                 style: TextStyle(
@@ -265,7 +265,7 @@ class ShiftExpensesViewState extends ConsumerState<ShiftExpensesView> {
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerStart,
               child: Text(
                 '${context.tr('د.ع')} ${money(amount)}',
                 style: TextStyle(

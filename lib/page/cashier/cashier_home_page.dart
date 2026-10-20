@@ -52,12 +52,25 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
   CashierShift? _activeShift;
   late final LocalDatabase _db;
 
+  /// The open shift's debt list, created once per shift and re-created only when
+  /// a revision bumps. An inline future in `build` restarted the query on every
+  /// rebuild - and this page rebuilds once a second off `waiterProvider` - so
+  /// the tab kept dropping back to its empty state mid-write.
+  Future<List<DebtModel>>? _debtsFuture;
+  int _debtsShiftId = -1;
+  late final VoidCallback _debtsRevisionListener;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _db = ref.read(localDbProvider);
     _db.onTableNotification = _handleTableNotification;
+    _debtsRevisionListener = () {
+      if (mounted) _refreshDebts();
+    };
+    _db.shiftsRevision.addListener(_debtsRevisionListener);
+    _db.orderRevision.addListener(_debtsRevisionListener);
     Future.microtask(() async {
       await ref.read(localDbProvider).checkOverdueTables();
       ref.read(waiterProvider.notifier).refreshSilent();
@@ -114,8 +127,23 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _overdueTimer?.cancel();
+    _db.shiftsRevision.removeListener(_debtsRevisionListener);
+    _db.orderRevision.removeListener(_debtsRevisionListener);
     _db.onTableNotification = null;
     super.dispose();
+  }
+
+  /// Re-arms the cached debt query for the open shift.
+  void _refreshDebts() {
+    final shiftId = _activeShift?.id ?? -1;
+    if (shiftId == _debtsShiftId && _debtsFuture != null) {
+      setState(() {});
+      return;
+    }
+    setState(() {
+      _debtsShiftId = shiftId;
+      _debtsFuture = _db.getDebtsByShift(shiftId);
+    });
   }
 
   void _handleTableNotification() {
@@ -129,7 +157,12 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
     final user = ref.read(authProvider);
     if (user != null && user.role == UserRole.cashier) {
       _activeShift = await ref.read(localDbProvider).getActiveShift(user.id);
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          _debtsShiftId = _activeShift?.id ?? -1;
+          _debtsFuture = _db.getDebtsByShift(_debtsShiftId);
+        });
+      }
     }
   }
 
@@ -1356,10 +1389,22 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
     // their shift (or a new one starts), the list is empty. The record itself
     // survives on the admin's «قەرزەکان» page. With no open shift there is no
     // list to show, so the query is sentineled to a shift id that cannot exist.
-    final shiftId = _activeShift?.id ?? -1;
+    final future = _debtsFuture ??= _db.getDebtsByShift(_activeShift?.id ?? -1);
     return FutureBuilder<List<DebtModel>>(
-      future: ref.read(localDbProvider).getDebtsByShift(shiftId),
+      future: future,
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە'),
+              style: const TextStyle(color: AppColors.softText),
+            ),
+          );
+        }
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
         final debts = snapshot.data ?? [];
         final totalDebt = debts.fold<double>(0, (sum, d) => sum + d.amount);
 
@@ -1567,21 +1612,29 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                InkWell(
-                                  borderRadius: BorderRadius.circular(8),
-                                  onTap: () => _collectDebt(debt),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.success.withValues(
-                                        alpha: 0.1,
+                                // 40px touch target: the old 18+12 padding came to
+                                // 30px, too small for a one-handed tap on the one
+                                // action that takes money off the list.
+                                Tooltip(
+                                  message: context.tr('وەرگرتنی قەرز'),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: () => _collectDebt(debt),
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      alignment: Alignment.center,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.success.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(
-                                      Icons.payments_rounded,
-                                      size: 18,
-                                      color: AppColors.success,
+                                      child: const Icon(
+                                        Icons.payments_rounded,
+                                        size: 20,
+                                        color: AppColors.success,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1767,9 +1820,15 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
         final count = syncState.clientCount ?? 0;
         final color = connected ? AppColors.success : AppColors.danger;
         return Tooltip(
+          // Localised: these were the only English literals on the screen, so
+          // the sync pill stayed English in all six languages and was announced
+          // that way by screen readers.
           message: connected
-              ? 'Server: ${syncState.serverIp ?? ""} | $count client(s)'
-              : 'Disconnected',
+              ? context.trp('سێرڤەر: {ip} | {count} ئامێر', {
+                  'ip': syncState.serverIp ?? '',
+                  'count': '$count',
+                })
+              : context.tr('پەیوەندی پچڕاوە'),
           child: Material(
             color: color.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(8),

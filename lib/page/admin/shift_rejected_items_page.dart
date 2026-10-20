@@ -178,7 +178,7 @@ class ShiftRejectedItemsViewState
           Flexible(
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              alignment: Alignment.centerRight,
+              alignment: AlignmentDirectional.centerStart,
               child: Text(
                 '${context.tr('د.ع')} ${money(totalValue)}',
                 style: const TextStyle(

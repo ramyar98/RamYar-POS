@@ -23,6 +23,11 @@ class _MergePageState extends ConsumerState<MergePage> {
   int? _selectedTargetId;
   int _step = 1;
 
+  /// True while the merge write is in flight. The confirm button stayed live
+  /// during the await, so a second tap re-ran the transfer against the already
+  /// emptied source and reported success a second time.
+  bool _merging = false;
+
   Color _statusColor(TableStatus status) => TableStatusVisuals.color(status);
 
   @override
@@ -405,7 +410,8 @@ class _MergePageState extends ConsumerState<MergePage> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () => _executeMerge(sourceTable, targetTable),
+              onPressed:
+                  _merging ? null : () => _executeMerge(sourceTable, targetTable),
               icon: const Icon(Icons.call_merge_rounded, size: 18),
               label: Text(context.tr('تێکەڵکردن')),
               style: FilledButton.styleFrom(
@@ -532,25 +538,40 @@ class _MergePageState extends ConsumerState<MergePage> {
   }
 
   Future<void> _executeMerge(TableModel source, TableModel target) async {
-    final db = ref.read(localDbProvider);
-    await db.transferItems(source.id, target.id);
-    await ref.read(waiterProvider.notifier).refresh();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          context.trp('مێزی {source} تێکەڵکرا بە {target}', {
-            'source': source.name,
-            'target': target.name,
-          }),
+    if (_merging) return;
+    _merging = true;
+    try {
+      final db = ref.read(localDbProvider);
+      await db.transferItems(source.id, target.id);
+      await ref.read(waiterProvider.notifier).refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.trp('مێزی {source} تێکەڵکرا بە {target}', {
+              'source': source.name,
+              'target': target.name,
+            }),
+          ),
+          backgroundColor: AppColors.success,
         ),
-        backgroundColor: AppColors.success,
-      ),
-    );
-    setState(() {
-      _selectedSourceId = null;
-      _selectedTargetId = null;
-      _step = 1;
-    });
+      );
+      setState(() {
+        _selectedSourceId = null;
+        _selectedTargetId = null;
+        _step = 1;
+      });
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.tr('گوازدنەوە سەرکەوتوو نەبوو')),
+            backgroundColor: AppColors.danger,
+          ),
+        );
+      }
+    } finally {
+      _merging = false;
+    }
   }
 }

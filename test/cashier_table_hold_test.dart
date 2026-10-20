@@ -116,7 +116,9 @@ void main() {
     await seatCaptain();
     await pumpHold(tester);
 
-    expect(find.text('6,000 IQD'), findsOneWidget);
+    // The currency unit follows the app language like every other screen, so
+    // this reads «6,000 د.ع» rather than the old hard-coded "IQD".
+    expect(find.text('6,000 د.ع'), findsOneWidget);
     expect(find.text('میوان'), findsOneWidget);
   });
 

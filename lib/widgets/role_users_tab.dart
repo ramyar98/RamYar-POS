@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/colors.dart';
 import '../core/constants.dart';
+import '../core/digits.dart';
 import '../core/responsive.dart';
 import '../services/app_localizations.dart';
 import '../database/local_db.dart';
@@ -29,6 +30,17 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
   bool _isAdding = false;
   LocalDatabase? _db;
 
+  /// The user list query, created once per refresh instead of on every build.
+  ///
+  /// It used to be `ref.read(...).getUsersByRole(...)` inline in `build`, so
+  /// every keystroke in the PIN field started a new query and each rebuild that
+  /// landed before it resolved flashed "هیچ بەکارهێنەرێک نییە".
+  Future<List<UserModel>>? _usersFuture;
+
+  /// True while «دروستکردنی نوێ» is writing a fresh access code, so a double
+  /// tap cannot run two writes and pop the dialog twice.
+  bool _regeneratingCode = false;
+
   @override
   void initState() {
     super.initState();
@@ -37,12 +49,23 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
     // as a const child by wiring the revision listener here directly).
     final db = ref.read(localDbProvider);
     _db = db;
+    _usersFuture = db.getUsersByRole(widget.role);
     db.usersRevision.addListener(_onUsersChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant RoleUsersTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.role != widget.role) {
+      _usersFuture = ref.read(localDbProvider).getUsersByRole(widget.role);
+    }
   }
 
   void _onUsersChanged() {
     if (!mounted) return;
-    setState(() {});
+    setState(() {
+      _usersFuture = ref.read(localDbProvider).getUsersByRole(widget.role);
+    });
   }
 
   @override
@@ -56,13 +79,16 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
     super.dispose();
   }
 
-  bool _isValidPin(String pin) {
-    final trimmed = pin.trim();
-    if (trimmed.length != 5) return false;
-    for (final ch in trimmed.split('')) {
-      if (ch.codeUnitAt(0) < 48 || ch.codeUnitAt(0) > 57) return false;
-    }
-    return true;
+  /// A PIN is exactly five ASCII digits, after normalising the localized
+  /// Arabic-Indic / Persian / fullwidth forms a regional keyboard produces.
+  bool _isValidPin(String pin) => _isFiveDigitPin(pin);
+
+  Future<void> _showChangePinDialog(UserModel user) async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _ChangePinDialog(user: user),
+    );
+    if (changed == true && mounted) setState(() {});
   }
 
   String _generateUniqueCode(List<String> existing) {
@@ -80,7 +106,8 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
 
   Future<void> _addUser() async {
     final name = _nameController.text.trim();
-    final pin = _pinController.text.trim();
+    // Store the ASCII form so the PIN matches what the login keypad submits.
+    final pin = toLatinDigits(_pinController.text.trim());
     if (name.isEmpty) {
       _showSnack(context.tr('ناو پێویستە'), AppColors.danger);
       return;
@@ -89,22 +116,32 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
       _showSnack(context.tr('وشەی نهێنی دەبێت ٥ ژمارە بێت'), AppColors.danger);
       return;
     }
+    if (_isAdding) return;
     setState(() => _isAdding = true);
-    final db = ref.read(localDbProvider);
-    final existingCodes = await db.getAllAccessCodes();
-    final accessCode = _generateUniqueCode(existingCodes);
-    final saved = await db.addUser(name, pin, widget.role, accessCode: accessCode);
-    if (!mounted) return;
-    setState(() => _isAdding = false);
-    if (saved) {
-      _nameController.clear();
-      _pinController.clear();
-      _showSnack(
-        context.trp('{name} بە سەرکەوتوویی زیاد کرا (IP: {code})', {'name': name, 'code': accessCode}),
-        AppColors.success,
-      );
-    } else {
-      _showSnack(context.tr('هەڵەیەک ڕوویدا لە زیادکردندا'), AppColors.danger);
+    try {
+      final db = ref.read(localDbProvider);
+      final existingCodes = await db.getAllAccessCodes();
+      final accessCode = _generateUniqueCode(existingCodes);
+      final saved = await db.addUser(name, pin, widget.role, accessCode: accessCode);
+      if (!mounted) return;
+      if (saved) {
+        _nameController.clear();
+        _pinController.clear();
+        _showSnack(
+          context.trp('{name} بە سەرکەوتوویی زیاد کرا (IP: {code})', {'name': name, 'code': accessCode}),
+          AppColors.success,
+        );
+      } else {
+        _showSnack(context.tr('هەڵەیەک ڕوویدا لە زیادکردندا'), AppColors.danger);
+      }
+    } catch (_) {
+      // A failed/locked write used to leave `_isAdding` stuck at true, which
+      // disabled the Add button for the rest of the session with no explanation.
+      if (mounted) {
+        _showSnack(context.tr('هەڵەیەک ڕوویدا لە زیادکردندا'), AppColors.danger);
+      }
+    } finally {
+      if (mounted) setState(() => _isAdding = false);
     }
   }
 
@@ -137,53 +174,6 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
       if (!mounted) return;
       setState(() {});
     }
-  }
-
-  void _showChangePinDialog(UserModel user) {
-    final pinController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(context.tr('گۆڕینی وشەی نهێنی')),
-        content: SingleChildScrollView(
-          child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(context.trp('وشەی نهێنی نوێ بۆ {name}', {'name': user.name})),
-            const SizedBox(height: 12),
-            TextField(
-              controller: pinController,
-              keyboardType: TextInputType.number,
-              maxLength: 5,
-              onChanged: (v) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: context.tr('وشەی نهێنی (٥ ژمارە)'),
-                filled: true,
-                fillColor: AppColors.background,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              ),
-            ),
-          ],
-        )),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(context.tr('ڕەتکردنەوە'))),
-          FilledButton(onPressed: () async {
-            final newPin = pinController.text.trim();
-            if (!_isValidPin(newPin)) {
-              ScaffoldMessenger.of(ctx).showSnackBar(
-                SnackBar(content: Text(context.tr('وشەی نهێنی دەبێت ٥ ژمارە بێت')), backgroundColor: AppColors.danger),
-              );
-              return;
-            }
-            final db = ref.read(localDbProvider);
-            await db.updateUserPin(user.id, newPin);
-            if (!ctx.mounted) return;
-            Navigator.pop(ctx);
-            setState(() {});
-          }, child: Text(context.tr('گۆڕین'))),
-        ],
-      ),
-    );
   }
 
   Future<void> _showAssignTablesDialog(UserModel waiter) async {
@@ -392,9 +382,16 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SelectableText(
-                            current,
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary, letterSpacing: 1),
+                          // Flexible + FittedBox: a long access code in a narrow
+                          // dialog used to throw a right-side overflow stripe.
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: SelectableText(
+                                current,
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.primary, letterSpacing: 1),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 12),
                           IconButton(
@@ -418,13 +415,22 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, 'close'), child: Text(context.tr('داخستن'))),
               TextButton.icon(
-                onPressed: () async {
-                  final newCode = _generateUniqueCode(existing.where((c) => c != current).toList());
-                  await db.setUserAccessCode(user.id, newCode);
-                  if (!ctx.mounted) return;
-                  Navigator.pop(ctx, 'regenerate');
-                  setState(() {});
-                },
+                onPressed: _regeneratingCode
+                    ? null
+                    : () async {
+                        setDialogState(() => _regeneratingCode = true);
+                        try {
+                          final newCode = _generateUniqueCode(existing.where((c) => c != current).toList());
+                          await db.setUserAccessCode(user.id, newCode);
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx, 'regenerate');
+                          setState(() {});
+                        } finally {
+                          if (ctx.mounted) {
+                            setDialogState(() => _regeneratingCode = false);
+                          }
+                        }
+                      },
                 icon: const Icon(Icons.refresh_rounded, size: 18),
                 label: Text(context.tr('دروستکردنی نوێ')),
               ),
@@ -501,7 +507,7 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<UserModel>>(
-      future: ref.read(localDbProvider).getUsersByRole(widget.role),
+      future: _usersFuture ??= ref.read(localDbProvider).getUsersByRole(widget.role),
       builder: (context, snapshot) {
         final users = snapshot.data ?? [];
         return Column(
@@ -527,92 +533,126 @@ class _RoleUsersTabState extends ConsumerState<RoleUsersTab> {
               ),
             ),
             Expanded(
-              child: users.isEmpty
-                  ? Center(child: Text(context.tr('هیچ بەکارهێنەرێک نییە'), style: TextStyle(color: AppColors.softText)))
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
-                      itemCount: users.length,
-                      itemBuilder: (context, index) {
-                        final user = users[index];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
+              child: snapshot.hasError
+                  ? Center(
+                      child: Text(
+                        context.tr('هەڵەیەک ڕوویدا لە خوێندنەوە'),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppColors.softText),
+                      ),
+                    )
+                  : snapshot.connectionState == ConnectionState.waiting &&
+                          !snapshot.hasData
+                      ? const Center(child: CircularProgressIndicator())
+                      : users.isEmpty
+                          ? Center(child: Text(context.tr('هیچ بەکارهێنەرێک نییە'), style: TextStyle(color: AppColors.softText)))
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMedium),
+                              itemCount: users.length,
+                              itemBuilder: (context, index) {
+                                final user = users[index];
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 44, height: 44,
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Center(child: Text('${user.id}', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.darkText)),
-                                    Text(user.hasRange
-                                        ? 'PIN: ${user.pin}  •  ${context.tr('مەودا')}: ${user.rangeStart}-${user.rangeEnd}'
-                                        : 'PIN: ${user.pin}', style: const TextStyle(color: AppColors.softText, fontSize: 13)),
-                                    if ((user.accessCode ?? '').trim().isNotEmpty)
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 2),
-                                        child: Text(
-                                          'IP: ${user.accessCode!.trim()}',
-                                          style: const TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.router_rounded, color: AppColors.blue, size: 20),
-                                tooltip: context.tr('نیشانەی IP'),
-                                visualDensity: VisualDensity.compact,
-                                style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap, padding: EdgeInsets.zero),
-                                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                                onPressed: () => _showIpDialog(user),
-                              ),
-                              if (widget.role == UserRole.waiter)
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              // Five action icons beside the name need ~220px;
+                              // on a 320px phone that left the name column ~40px
+                              // and painted a red overflow stripe. Below 560px
+                              // the actions drop to their own row instead.
+                              final compact = constraints.maxWidth < 560;
+                              final actions = <Widget>[
                                 IconButton(
-                                  icon: const Icon(Icons.filter_alt_rounded, color: AppColors.blue, size: 20),
-                                  tooltip: context.tr('دیاریکردنی مەودای مێز'),
+                                  icon: const Icon(Icons.router_rounded, color: AppColors.blue, size: 20),
+                                  tooltip: context.tr('نیشانەی IP'),
                                   visualDensity: VisualDensity.compact,
                                   style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap, padding: EdgeInsets.zero),
-                                  constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                                  onPressed: () => _showRangeDialog(user),
+                                  constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                                  onPressed: () => _showIpDialog(user),
                                 ),
-                              if (widget.role == UserRole.waiter)
+                                if (widget.role == UserRole.waiter)
+                                  IconButton(
+                                    icon: const Icon(Icons.filter_alt_rounded, color: AppColors.blue, size: 20),
+                                    tooltip: context.tr('دیاریکردنی مەودای مێز'),
+                                    visualDensity: VisualDensity.compact,
+                                    style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap, padding: EdgeInsets.zero),
+                                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                                    onPressed: () => _showRangeDialog(user),
+                                  ),
+                                if (widget.role == UserRole.waiter)
+                                  IconButton(
+                                    icon: const Icon(Icons.table_restaurant_rounded, color: AppColors.success, size: 20),
+                                    tooltip: context.tr('دیاریکردنی مێز'),
+                                    visualDensity: VisualDensity.compact,
+                                    style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap, padding: EdgeInsets.zero),
+                                    constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                                    onPressed: () => _showAssignTablesDialog(user),
+                                  ),
                                 IconButton(
-                                  icon: const Icon(Icons.table_restaurant_rounded, color: AppColors.success, size: 20),
-                                  tooltip: context.tr('دیاریکردنی مێز'),
+                                  icon: const Icon(Icons.lock_outline_rounded, color: AppColors.primary, size: 20),
+                                  tooltip: context.tr('گۆڕینی وشەی نهێنی'),
                                   visualDensity: VisualDensity.compact,
                                   style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap, padding: EdgeInsets.zero),
-                                  constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                                  onPressed: () => _showAssignTablesDialog(user),
+                                  constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                                  onPressed: () => _showChangePinDialog(user),
                                 ),
-                              IconButton(
-                                icon: const Icon(Icons.lock_outline_rounded, color: AppColors.primary, size: 20),
-                                tooltip: context.tr('گۆڕینی وشەی نهێنی'),
-                                visualDensity: VisualDensity.compact,
-                                style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap, padding: EdgeInsets.zero),
-                                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                                onPressed: () => _showChangePinDialog(user),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20),
-                                visualDensity: VisualDensity.compact,
-                                style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap, padding: EdgeInsets.zero),
-                                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                                onPressed: () => _deleteUser(user),
-                              ),
-                            ],
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: AppColors.danger, size: 20),
+                                  tooltip: context.tr('سڕینەوە'),
+                                  visualDensity: VisualDensity.compact,
+                                  style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap, padding: EdgeInsets.zero),
+                                  constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+                                  onPressed: () => _deleteUser(user),
+                                ),
+                              ];
+                              final identity = Row(
+                                children: [
+                                  Container(
+                                    width: 44, height: 44,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Center(child: Text('${user.id}', style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary))),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.darkText)),
+                                        Text(user.hasRange
+                                            ? 'PIN: ${user.pin}  •  ${context.tr('مەودا')}: ${user.rangeStart}-${user.rangeEnd}'
+                                            : 'PIN: ${user.pin}', style: const TextStyle(color: AppColors.softText, fontSize: 13)),
+                                        if ((user.accessCode ?? '').trim().isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Text(
+                                              'IP: ${user.accessCode!.trim()}',
+                                              style: const TextStyle(color: AppColors.success, fontSize: 12, fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              );
+                              if (!compact) {
+                                return Row(children: [...identity.children, ...actions]);
+                              }
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  identity,
+                                  const SizedBox(height: 4),
+                                  Row(mainAxisAlignment: MainAxisAlignment.end, children: actions),
+                                ],
+                              );
+                            },
                           ),
                         );
                       },
@@ -649,6 +689,10 @@ class _TableRangeDialogState extends State<_TableRangeDialog> {
   late final TextEditingController _startController;
   late final TextEditingController _endController;
 
+  /// True while a save/reset write is in flight, so a double tap cannot run the
+  /// write twice or pop the route beneath the dialog.
+  bool _saving = false;
+
   @override
   void initState() {
     super.initState();
@@ -665,8 +709,10 @@ class _TableRangeDialogState extends State<_TableRangeDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final start = int.tryParse(_startController.text.trim());
-    final end = int.tryParse(_endController.text.trim());
+    // Normalise Arabic-Indic/Persian digits: `int.tryParse('٥')` is null, so a
+    // captain typing ٥..١٠ used to see the Save button stay disabled.
+    final start = int.tryParse(toLatinDigits(_startController.text.trim()));
+    final end = int.tryParse(toLatinDigits(_endController.text.trim()));
     final valid = start != null && end != null && start <= end;
     return AlertDialog(
       title: Text(context.trp('دیاریکردنی مەودای مێز بۆ {name}', {'name': widget.waiter.name})),
@@ -717,11 +763,14 @@ class _TableRangeDialogState extends State<_TableRangeDialog> {
         // Same single reset as the pick-tables dialog: clears the range
         // AND the picked tables, so one press is genuinely "normal".
         TextButton.icon(
-          onPressed: () async {
-            await widget.db.resetWaiterScope(widget.waiter.id);
-            if (!context.mounted) return;
-            Navigator.pop(context, true);
-          },
+          onPressed: _saving
+              ? null
+              : () async {
+                  setState(() => _saving = true);
+                  await widget.db.resetWaiterScope(widget.waiter.id);
+                  if (!context.mounted) return;
+                  Navigator.pop(context, true);
+                },
           icon: const Icon(Icons.restart_alt_rounded, size: 18),
           label: Text(context.tr('گەڕاندنەوە بۆ ئاسایی')),
         ),
@@ -732,12 +781,129 @@ class _TableRangeDialogState extends State<_TableRangeDialog> {
         FilledButton(
           onPressed: valid
               ? () async {
+                  if (_saving) return;
+                  setState(() => _saving = true);
                   await widget.db.updateUserRange(widget.waiter.id, start, end);
                   if (!context.mounted) return;
                   Navigator.pop(context, true);
                 }
               : null,
           child: Text(context.tr('پاشەکەوتکردن')),
+        ),
+      ],
+    );
+  }
+}
+
+/// True when [pin] is exactly five ASCII digits.
+///
+/// Normalises first: a PIN typed on an Arabic/Persian keyboard arrives as ٠-٩ /
+/// ۰-۹ and a raw code-unit range check rejected it even though it was a
+/// perfectly good five-digit PIN.
+bool _isFiveDigitPin(String pin) {
+  final trimmed = toLatinDigits(pin.trim());
+  if (trimmed.length != 5) return false;
+  for (final ch in trimmed.split('')) {
+    if (ch.codeUnitAt(0) < 48 || ch.codeUnitAt(0) > 57) return false;
+  }
+  return true;
+}
+
+/// «گۆڕینی وشەی نهێنی» for one account.
+///
+/// A real [ConsumerStatefulWidget] rather than a `StatefulBuilder` so the PIN
+/// controller is disposed with the route (it used to leak on every open) and a
+/// `_saving` flag so a double tap cannot run two writes and pop the page behind
+/// the dialog.
+class _ChangePinDialog extends ConsumerStatefulWidget {
+  const _ChangePinDialog({required this.user});
+
+  final UserModel user;
+
+  @override
+  ConsumerState<_ChangePinDialog> createState() => _ChangePinDialogState();
+}
+
+class _ChangePinDialogState extends ConsumerState<_ChangePinDialog> {
+  final _pinController = TextEditingController();
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _pinController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    final newPin = toLatinDigits(_pinController.text.trim());
+    if (!_isFiveDigitPin(newPin)) {
+      setState(() => _error = context.tr('وشەی نهێنی دەبێت ٥ ژمارە بێت'));
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await ref.read(localDbProvider).updateUserPin(widget.user.id, newPin);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = context.tr('هەڵەیەک ڕوویدا لە زیادکردندا');
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(context.tr('گۆڕینی وشەی نهێنی')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              context.trp('وشەی نهێنی نوێ بۆ {name}',
+                  {'name': widget.user.name}),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _pinController,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              maxLength: 5,
+              onChanged: (_) {
+                if (_error != null) setState(() => _error = null);
+              },
+              onSubmitted: (_) => _save(),
+              decoration: InputDecoration(
+                labelText: context.tr('وشەی نهێنی (٥ ژمارە)'),
+                errorText: _error,
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: Text(context.tr('ڕەتکردنەوە')),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(context.tr('گۆڕین')),
         ),
       ],
     );

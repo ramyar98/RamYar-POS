@@ -1,19 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../core/colors.dart';
+import '../core/digits.dart';
+import '../core/fmt.dart';
+import '../models/dollar_rate_model.dart';
+import '../providers/dollar_rate_provider.dart';
 import '../services/app_localizations.dart';
 import 'amount_input_formatter.dart';
 
-class CurrencyConverter extends StatefulWidget {
+class CurrencyConverter extends ConsumerStatefulWidget {
   const CurrencyConverter({super.key});
 
   @override
-  State<CurrencyConverter> createState() => _CurrencyConverterState();
+  ConsumerState<CurrencyConverter> createState() => _CurrencyConverterState();
 }
 
-class _CurrencyConverterState extends State<CurrencyConverter> {
-  final _rateController = TextEditingController(text: '150,000');
+class _CurrencyConverterState extends ConsumerState<CurrencyConverter> {
+  final _rateController = TextEditingController();
   final _usdController = TextEditingController();
   final _iqdController = TextEditingController();
+
+  /// Set once the cashier types a rate of their own. From then on the saved
+  /// shop rate no longer overwrites the box, so a "what if" entry survives.
+  bool _manualRate = false;
+
+  /// The last rate this widget pushed into [_rateController].
+  String? _syncedRateLabel;
 
   @override
   void dispose() {
@@ -23,13 +36,16 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
     super.dispose();
   }
 
-  double _parseAmount(String text) => double.tryParse(text.replaceAll(',', '')) ?? 0;
-
-  String _formatIqd(double value) {
-    return value.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-      (match) => '${match[1]},',
-    );
+  /// Reads a typed amount, accepting localized digits and comma grouping.
+  ///
+  /// `double.tryParse` alone returns 0 for "١٢٣٤" or "۱٬۲۰۰", so a cashier on an
+  /// Arabic keyboard silently got an empty conversion box.
+  double _parseAmount(String text) {
+    final normalized = toLatinDigits(text)
+        .replaceAll(',', '')
+        .replaceAll('٬', '')
+        .trim();
+    return double.tryParse(normalized) ?? 0;
   }
 
   String _formatUsd(double value) => value.toStringAsFixed(2);
@@ -38,7 +54,7 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
     final rate = _parseAmount(_rateController.text);
     final usd = _parseAmount(value);
     if (rate > 0 && usd > 0) {
-      _iqdController.text = _formatIqd(usd * rate / 100);
+      _iqdController.text = money(usd * rate / 100);
     } else {
       _iqdController.text = '';
     }
@@ -54,8 +70,40 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
     }
   }
 
+  /// Recomputes whichever side the cashier filled in.
+  void _recompute() {
+    if (_usdController.text.trim().isNotEmpty) {
+      _onUsdChanged(_usdController.text);
+    } else if (_iqdController.text.trim().isNotEmpty) {
+      _onIqdChanged(_iqdController.text);
+    }
+  }
+
+  /// Seeds the "rate for 100$" box from the rate the admin saved.
+  ///
+  /// The old widget hard-coded 150,000, so after the admin changed the rate the
+  /// converter kept converting at the stale figure while the banner beside it
+  /// showed the new one.
+  void _syncSavedRate(DollarRate rate) {
+    if (_manualRate) return;
+    final perDollar = rate.iqdPerDollar;
+    if (perDollar == null) return;
+    final label = money((perDollar * 100).round());
+    if (label == _syncedRateLabel) return;
+    _syncedRateLabel = label;
+    // Controllers cannot be written during build; do it once the frame lands.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _manualRate) return;
+      _rateController.text = label;
+      _recompute();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Follow the admin's saved rate, so the converter and the rate banner next
+    // to it can never disagree.
+    _syncSavedRate(ref.watch(dollarRateProvider).valueOrNull ?? DollarRate.fallback);
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -117,6 +165,11 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
                     contentPadding: const EdgeInsets.symmetric(vertical: 8),
                   ),
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  onChanged: (_) {
+                    // The cashier overrode the shop rate; keep their figure.
+                    _manualRate = true;
+                    _recompute();
+                  },
                 ),
               ),
               const SizedBox(width: 8),
@@ -152,6 +205,9 @@ class _CurrencyConverterState extends State<CurrencyConverter> {
                   color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
+                // `arrow_forward_rounded` carries `matchTextDirection: true`, so
+                // it already points from the USD field to the IQD field in both
+                // RTL and LTR.
                 child: const Center(child: Icon(Icons.arrow_forward_rounded, color: AppColors.primary, size: 20)),
               ),
               const SizedBox(width: 12),

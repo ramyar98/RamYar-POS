@@ -112,7 +112,7 @@ class PrintPreview {
       if (design.showSeatedAt && seatedAt.isNotEmpty)
         '${context.tr('کاتی دانیشتن')}: ${_fmtTime(seatedAt)}',
       if (design.showLeaveTime)
-        '${context.tr('کاتی ڕۆیشتن')}: ${DateTime.now().toString().substring(0, 19)}',
+        '${context.tr('کاتی ڕۆیشتن')}: ${_fmtTime(DateTime.now().toIso8601String())}',
       if (design.showWaiter && waiterName.isNotEmpty)
         '${context.tr('کاپتن')}: $waiterName',
       if (design.showCashier && cashierName.isNotEmpty)

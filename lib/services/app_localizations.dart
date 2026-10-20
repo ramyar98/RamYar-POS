@@ -4501,6 +4501,13 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.english: 'An error occurred while adding',
     AppLanguage.turkish: 'Eklerken bir hata oluştu',
   },
+  'هەڵەیەک ڕوویدا لە خوێندنەوە': {
+    AppLanguage.badini: 'خەلەتییەک ڕوویدا د خواندنێ دا',
+    AppLanguage.arabic: 'حدث خطأ أثناء القراءة',
+    AppLanguage.persian: 'هنگام خواندن خطایی رخ داد',
+    AppLanguage.english: 'Could not load the data',
+    AppLanguage.turkish: 'Veriler yüklenemedi',
+  },
   '{count} مێزی {name} خواردنی تێدایە. پێش سڕینەوە دەبێت هەریەکە ڕادەخرێت یان دەنرێتەوە.': {
     AppLanguage.badini:
         '{count} ماسەیێن {name} خوارن تێدا یە. بەری ژێبرنێ دڤێت هەر یەک واسڵ ببیت یان ڤەگەڕێت.',

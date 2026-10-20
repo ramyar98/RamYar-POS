@@ -503,6 +503,9 @@ class _CashCalculatorDialogState extends State<CashCalculatorDialog> {
         borderRadius: BorderRadius.circular(20),
         onTap: () => _quickAmount(amount),
         child: Container(
+          // 40px tall so the chip is a comfortable touch target; the old 8px
+          // vertical padding gave ~34px.
+          constraints: const BoxConstraints(minHeight: 40),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),

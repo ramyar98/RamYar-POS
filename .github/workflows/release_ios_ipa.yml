@@ -1,0 +1,85 @@
+name: Release iOS IPA
+
+# Attaches the freshly built .ipa to a GitHub Release, so there is one stable
+# download link per build instead of digging through Actions artifacts.
+#
+# The .ipa itself is built by build_ios_ipa.yml (on push). This workflow runs
+# only when you ask it to, or when you push a version tag, so a Release is a
+# deliberate act rather than something every push creates.
+#
+# Remember the one caveat of an unsigned .ipa: it installs via Sideloadly /
+# AltStore, which re-signs it with your free Apple ID (7-day expiry). See the
+# header of build_ios_ipa.yml for the full explanation.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get Flutter packages
+        run: flutter pub get
+
+      - name: Build unsigned release app
+        run: flutter build ios --release --no-codesign
+
+      - name: Package the .app into a real .ipa
+        run: |
+          set -euo pipefail
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          OUT_DIR="build/ios/unsigned-ipa"
+          IPA_NAME="RamyarPOS-unsigned"
+          rm -rf "$OUT_DIR"
+          mkdir -p "$OUT_DIR/Payload"
+          cp -R "$APP_PATH" "$OUT_DIR/Payload/"
+          ( cd "$OUT_DIR" && zip -qry "$IPA_NAME.ipa" Payload && rm -rf Payload )
+          ls -lh "$OUT_DIR/$IPA_NAME.ipa"
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "value=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish release with the .ipa attached
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.value }}
+          name: RAMYAR POS ${{ steps.tag.outputs.value }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            **iOS build — unsigned `.ipa`**
+
+            Install with Sideloadly or AltStore: they re-sign the app with your
+            own free Apple ID as they install it. No paid Apple Developer
+            account is needed, and no Mac.
+
+            Free Apple IDs expire the signature after **7 days**; re-run
+            Sideloadly weekly to refresh it.
+          files: build/ios/unsigned-ipa/*.ipa

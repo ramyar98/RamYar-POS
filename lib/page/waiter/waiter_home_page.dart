@@ -157,7 +157,7 @@ class _WaiterHomePageState extends ConsumerState<WaiterHomePage>
       case TableStatus.occupied:
         return context.tr('دانیشتوو');
       case TableStatus.billRequested:
-        return context.tr('داوای پارەی کردووە');
+        return context.tr('داوای حیسابی کردووە');
       case TableStatus.overdue:
         return context.tr('دواکەوتوو');
     }

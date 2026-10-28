@@ -156,3 +156,71 @@ class OrderDeliveryModel {
         rejected: (map['rejected'] as int? ?? 0) == 1,
       );
 }
+
+/// One table's sending state as the CASHIER's device sees it.
+///
+/// The captain's [OrderDeliveryModel] is built from `order_delivery` rows, and
+/// those rows exist only on the device that sent the order. The till therefore
+/// never has them - but it does have the table and its dishes, and those carry
+/// the two facts the cashier needs: `order_items.syncedAt` (this line reached
+/// the till) and `order_items.printedAt` / `failedPrinters` (this line's ticket
+/// came out of every printer it was routed to).
+///
+/// The cashier needs this view because they can add food to a table before the
+/// captain has started their shift. Without it, a dish added on the till that
+/// never printed has nowhere to be seen.
+class TillDeliveryModel {
+  final int tableId;
+
+  /// What the till calls the table ("مێزی 1", or the name the cashier gave it).
+  final String tableName;
+
+  /// When the guests sat down; empty for a table that was never seated.
+  final String seatedAt;
+
+  /// Newest dish time on the table - what the card shows as "نێردراوە".
+  final String sentAt;
+
+  /// The captain who opened the table, when known.
+  final String waiterName;
+
+  /// Per-dish delivery state, ordered as the dishes were added.
+  final List<DeliveryItemStatus> items;
+
+  const TillDeliveryModel({
+    required this.tableId,
+    required this.tableName,
+    this.seatedAt = '',
+    this.sentAt = '',
+    this.waiterName = '',
+    this.items = const [],
+  });
+
+  bool get hasItemState => items.isNotEmpty;
+  int get itemTotal => items.length;
+  int get arrivedItemCount => items.where((i) => i.arrived).length;
+  int get printedItemCount => items.where((i) => i.printed).length;
+
+  /// Dishes that have not reached the till yet - the «نەگەیشت» filter.
+  List<DeliveryItemStatus> get pendingItems =>
+      items.where((i) => !i.arrived).toList();
+
+  /// Dishes still owing a ticket somewhere - the «دوبارە پرێنت» filter.
+  List<DeliveryItemStatus> get unprintedItems =>
+      items.where((i) => i.needsPrint).toList();
+
+  bool get allArrived => items.isNotEmpty && arrivedItemCount == itemTotal;
+  bool get allPrinted => items.isNotEmpty && printedItemCount == itemTotal;
+  bool get anyPrintFailed => items.any((i) => i.printFailed);
+
+  /// The pill shown on the card.
+  ///
+  /// Only four states, because a till card is a question with four answers:
+  /// did the food get here, and did the ticket come out?
+  String get statusLabel {
+    if (items.isEmpty) return 'not_arrived';
+    if (allPrinted) return 'printed';
+    if (!allArrived) return 'not_arrived';
+    return 'print_failed';
+  }
+}

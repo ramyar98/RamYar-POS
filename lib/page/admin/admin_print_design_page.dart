@@ -30,7 +30,8 @@ class AdminPrintDesignPage extends ConsumerStatefulWidget {
       _AdminPrintDesignPageState();
 }
 
-class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
+class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage>
+    with SingleTickerProviderStateMixin {
   ReceiptDesign _design = ReceiptDesign.standard;
   bool _loading = true;
   bool _printing = false;
@@ -38,6 +39,7 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
   final _shopCtrl = TextEditingController();
   final _titleCtrl = TextEditingController();
   final _footerCtrl = TextEditingController();
+  late final TabController _tabController = TabController(length: 4, vsync: this);
 
   /// A small, fixed bill the preview and the test print always show, so the
   /// admin sees the same slip while they tweak it.
@@ -75,6 +77,7 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
     _shopCtrl.dispose();
     _titleCtrl.dispose();
     _footerCtrl.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -165,6 +168,20 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         title: Text(context.tr('دیزاینی پرێنت')),
+        bottom: isPhone
+            ? null
+            : TabBar(
+                controller: _tabController,
+                indicatorColor: Colors.white,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                tabs: const [
+                  Tab(text: 'سەرەکی'),
+                  Tab(text: 'زانیاری'),
+                  Tab(text: 'خواردن و پارە'),
+                  Tab(text: 'پێشکەوتوو'),
+                ],
+              ),
         actions: [
           TextButton.icon(
             onPressed: _loading ? null : _save,
@@ -187,7 +204,18 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
           : Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(flex: 3, child: ListView(children: _controls())),
+                Expanded(
+                  flex: 3,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      ListView(children: _controlsGeneral()),
+                      ListView(children: _controlsInfo()),
+                      ListView(children: _controlsItemsMoney()),
+                      ListView(children: _controlsAdvanced()),
+                    ],
+                  ),
+                ),
                 const VerticalDivider(width: 1),
                 Expanded(
                   flex: 2,
@@ -204,7 +232,9 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
 
   // ==================== Controls ====================
 
-  List<Widget> _controls() {
+  List<Widget> _controls() => _controlsGeneral();
+
+  List<Widget> _controlsGeneral() {
     return [
       _section(context.tr('تایبەتمەندییەکان')),
       _textField(
@@ -227,7 +257,14 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
         _design.showHeaderTitle,
         (v) => _set(_design.copyWith(showHeaderTitle: v)),
       ),
+      const SizedBox(height: 16),
+      _actionButtons(),
+      const SizedBox(height: 24),
+    ];
+  }
 
+  List<Widget> _controlsInfo() {
+    return [
       _section(context.tr('زانیاری')),
       _switchRow(
         context.tr('مێز'),
@@ -264,7 +301,14 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
         _design.showCashier,
         (v) => _set(_design.copyWith(showCashier: v)),
       ),
+      const SizedBox(height: 16),
+      _actionButtons(),
+      const SizedBox(height: 24),
+    ];
+  }
 
+  List<Widget> _controlsItemsMoney() {
+    return [
       _section(context.tr('خواردن و پارە')),
       _switchRow(
         context.tr('خواردنەکان'),
@@ -291,7 +335,14 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
         _design.bigTotal,
         (v) => _set(_design.copyWith(bigTotal: v)),
       ),
+      const SizedBox(height: 16),
+      _actionButtons(),
+      const SizedBox(height: 24),
+    ];
+  }
 
+  List<Widget> _controlsAdvanced() {
+    return [
       _section(context.tr('ڕێکخستن')),
       _choiceRow(
         context.tr('جۆری هێڵ'),
@@ -316,7 +367,6 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
         10,
         (v) => _set(_design.copyWith(feedBeforeCut: v)),
       ),
-
       _section(context.tr('دەقی خوارەوە')),
       _switchRow(
         context.tr('پیشاندانی دەقی خوارەوە'),
@@ -329,42 +379,58 @@ class _AdminPrintDesignPageState extends ConsumerState<AdminPrintDesignPage> {
         (v) => _set(_design.copyWith(footerText: v)),
         maxLines: 3,
       ),
-
       const SizedBox(height: 16),
-      Row(
+      _actionButtons(),
+      const SizedBox(height: 24),
+    ];
+  }
+
+  Widget _actionButtons() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Column(
         children: [
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: _printing ? null : _testPrint,
-              icon: _printing
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.print_rounded),
-              label: Text(context.tr('چاپی تاقیکردنەوە')),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _printing ? null : _testPrint,
+                  icon: _printing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.print_rounded),
+                  label: Text(context.tr('چاپی تاقیکردنەوە')),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
               ),
-            ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _loading
+                      ? null
+                      : () => setState(() => _apply(ReceiptDesign.standard)),
+                  icon: const Icon(Icons.restart_alt_rounded),
+                  label: Text(context.tr('گەڕاندنەوە بۆ ڕەسەن')),
+                ),
+              ),
+            ],
           ),
         ],
       ),
-      const SizedBox(height: 8),
-      OutlinedButton.icon(
-        onPressed: _loading
-            ? null
-            : () => setState(() => _apply(ReceiptDesign.standard)),
-        icon: const Icon(Icons.restart_alt_rounded),
-        label: Text(context.tr('گەڕاندنەوە بۆ ڕەسەن')),
-      ),
-      const SizedBox(height: 24),
-    ];
+    );
   }
 
   Widget _section(String title) => Padding(

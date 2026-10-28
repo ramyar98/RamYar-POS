@@ -24,10 +24,15 @@ const Color _pendingYellow = Color(0xFFE6A700);
 /// پەڕەی تەواو بۆ دۆخی ناردنی داواکارییەکان (Order Delivery).
 ///
 /// ئەم پەڕەیە بە ئاستی ئایتیم کار دەکات، نەک تەنها بە ئاستی مێز:
-///  - گەیشت / نەگەیشت: ئایا ئەم خواردنە گەیشتووەتە سیستەمی کاشێر؟
-///  - پرێنت / دوبارە پرێنت: ئایا تیکەتی ئەم خواردنە لە هەموو پرێنتەرە
+///  - نەگەیشت: ئایا ئەم خواردنە هێشتا نەگەیشتووەتە سیستەمی کاشێر؟
+///  - دووبارە پرێنت: ئایا تیکەتی ئەم خواردنە لە هەموو پرێنتەرە
 ///    تەرخانکراوەکانی (چێشتخانە، باڕ، پرێنتی کاشێر، ژووری نێرگیلە) دەرچووە؟
 ///    هەر ئایتیمێک پرێنت نەکرابێت لە بەشی «دوبارە پرێنت» دەردەکەوێت.
+///
+/// فلتەرەکان تەنها سێ بەشن: «هەموو» (هەموو ئایتیمەکان)، «نەگەیشت» (ئەوەی
+/// هێشتا گەیشتووە نییە) و «دوبارە پرێنت» (ئەوەی تیکەتی بەردەستە). بەشەکانی
+/// «گەیشت» و «پرێنت» لابردەن: ئەوان دۆخەکان بە ڕەنگی خۆیان لەسەر کارتەکان
+/// دیارە و فلتەرێکی تایبەتیان پێویست نییە.
 class OrderDeliveryPage extends ConsumerStatefulWidget {
   const OrderDeliveryPage({super.key});
 
@@ -68,27 +73,16 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
     if (filter == 'all') return true;
     if (d.items.isEmpty) {
       switch (filter) {
-        case 'arrived':
-          return d.hasArrived &&
-              !d.hasPrinted &&
-              !d.isPrintFailed &&
-              !d.rejected;
         case 'not_arrived':
           return d.isNotArrived;
-        case 'printed':
-          return d.isPrinted;
         case 'retry_print':
           return d.isRetryPrint;
       }
       return true;
     }
     switch (filter) {
-      case 'arrived':
-        return d.items.any((i) => i.arrived);
       case 'not_arrived':
         return d.items.any((i) => !i.arrived);
-      case 'printed':
-        return d.items.any((i) => i.printed);
       case 'retry_print':
         return d.items.any((i) => i.needsPrint);
     }
@@ -98,12 +92,8 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
   /// بەشدارییەکی یەک داواکاری بۆ ژماردنی فلتەرەکە (بە ژمارەی ئایتیم).
   int _dishContribution(OrderDeliveryModel d, String filter) {
     switch (filter) {
-      case 'arrived':
-        return d.items.where((i) => i.arrived).length;
       case 'not_arrived':
         return d.items.where((i) => !i.arrived).length;
-      case 'printed':
-        return d.items.where((i) => i.printed).length;
       case 'retry_print':
         return d.unprintedItems.length;
       default:
@@ -127,12 +117,8 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
   List<DeliveryItemStatus> _visibleItems(OrderDeliveryModel d) {
     if (d.items.isEmpty) return const [];
     switch (_selectedFilter) {
-      case 'arrived':
-        return d.items.where((i) => i.arrived).toList();
       case 'not_arrived':
         return d.items.where((i) => !i.arrived).toList();
-      case 'printed':
-        return d.items.where((i) => i.printed).toList();
       case 'retry_print':
         return d.unprintedItems;
       default:
@@ -307,11 +293,11 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
   }
 
   Widget _buildFilterBar(List<OrderDeliveryModel> deliveries) {
+    // Only three buckets, because those are the three questions the captain
+    // actually asks: what is still on its way, and what still owes a ticket.
     final filters = [
       ('all', context.tr('هەموو')),
-      ('arrived', context.tr('گەیشت')),
       ('not_arrived', context.tr('نەگەیشت')),
-      ('printed', context.tr('پرێنت')),
       ('retry_print', context.tr('دوبارە پرێنت')),
     ];
 
@@ -355,9 +341,7 @@ class _OrderDeliveryPageState extends ConsumerState<OrderDeliveryPage> {
         runSpacing: 8,
         children: [
           _buildLegendChip(_pendingYellow, context.tr('نەگەیشت')),
-          _buildLegendChip(AppColors.blue, context.tr('گەیشت')),
           _buildLegendChip(_pendingYellow, context.tr('دوبارە پرێنت')),
-          _buildLegendChip(AppColors.success, context.tr('پرێنت')),
           if (rejected > 0)
             _buildLegendChip(AppColors.danger, context.tr('ڕەفز')),
         ],

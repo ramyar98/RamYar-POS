@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'order_model.dart';
 
 /// A table that was still sitting with an open bill at the moment a cashier
-/// closed their shift.
+/// closed their shift - or one that a shift inherited because it was still
+/// sitting when that shift opened.
 ///
-/// The snapshot belongs to the admin's shift report only: the table itself is
-/// left exactly as it was, nothing is settled or repriced, and the amount is
-/// never counted into the shift's money. It answers the one question the report
-/// could not - which tables were left un-settled when the cashier walked out.
+/// The snapshot belongs to the admin's shift report: nothing here settles or
+/// reprices a table by itself. It answers the two questions the report could
+/// not - which tables were left un-settled when the cashier walked out, and
+/// which of them the next shift took over and closed.
 class RemainingTable {
   final int id;
   final int shiftId;
@@ -30,6 +31,20 @@ class RemainingTable {
   final String itemsJson;
   final String createdAt;
 
+  /// The shift this table was carried IN from (0 = it was not carried in; it
+  /// was captured when that shift closed).
+  final int carriedFromShiftId;
+  final int carriedFromCashierId;
+  final String carriedFromStartedAt;
+
+  /// When the table was adopted by the shift that owns this row.
+  final String carriedAt;
+
+  /// When the table was settled, and under which shift. Empty while the table
+  /// is still sitting in the dining room.
+  final String settledAt;
+  final int settledShiftId;
+
   const RemainingTable({
     this.id = 0,
     required this.shiftId,
@@ -45,7 +60,20 @@ class RemainingTable {
     this.totalAmount = 0,
     this.itemsJson = '',
     required this.createdAt,
+    this.carriedFromShiftId = 0,
+    this.carriedFromCashierId = 0,
+    this.carriedFromStartedAt = '',
+    this.carriedAt = '',
+    this.settledAt = '',
+    this.settledShiftId = 0,
   });
+
+  /// True when this table was already sitting when the shift opened, i.e. the
+  /// shift inherited it instead of seating it.
+  bool get isCarriedIn => carriedAt.isNotEmpty;
+
+  /// The table was inherited and is still open - the cashier has work to do.
+  bool get isOutstanding => isCarriedIn && settledAt.isEmpty;
 
   Map<String, dynamic> toMap() => {
     if (id != 0) 'id': id,
@@ -62,6 +90,12 @@ class RemainingTable {
     'totalAmount': totalAmount,
     'itemsJson': itemsJson,
     'createdAt': createdAt,
+    'carriedFromShiftId': carriedFromShiftId,
+    'carriedFromCashierId': carriedFromCashierId,
+    'carriedFromStartedAt': carriedFromStartedAt,
+    'carriedAt': carriedAt,
+    'settledAt': settledAt,
+    'settledShiftId': settledShiftId,
   };
 
   factory RemainingTable.fromMap(Map<String, dynamic> map) => RemainingTable(
@@ -79,6 +113,12 @@ class RemainingTable {
     totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? 0,
     itemsJson: map['itemsJson'] as String? ?? '',
     createdAt: map['createdAt'] as String? ?? '',
+    carriedFromShiftId: map['carriedFromShiftId'] as int? ?? 0,
+    carriedFromCashierId: map['carriedFromCashierId'] as int? ?? 0,
+    carriedFromStartedAt: map['carriedFromStartedAt'] as String? ?? '',
+    carriedAt: map['carriedAt'] as String? ?? '',
+    settledAt: map['settledAt'] as String? ?? '',
+    settledShiftId: map['settledShiftId'] as int? ?? 0,
   );
 }
 

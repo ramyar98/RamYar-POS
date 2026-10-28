@@ -12,8 +12,10 @@ import 'package:ramyar_pos/page/waiter/order_delivery_page.dart';
 /// Renders the captain's delivery screen against a real (in-memory) database
 /// and asserts the item-level contract the UI promises:
 ///
-///  * the five filters exist and their counts are counted per DISH, not per
-///    table (one order with three arrived dishes cannot read «گەیشت (1)»);
+///  * the three filters exist and their counts are counted per DISH, not per
+///    table (one order with three arrived dishes cannot read «نەگەیشت (1)»);
+///  * the «گەیشت» and «پرێنت» filters are gone - they are card colours, not
+///    buckets the captain picks;
 ///  * every dish is listed on its own row with its printer and its two status
 ///    icons - arrival (till) and print (every assigned printer);
 ///  * selecting «دوبارە پرێنت» hides the dishes that printed and keeps exactly
@@ -102,13 +104,15 @@ void main() {
 
     await pumpPage(tester);
 
-    // Counts are per dish: 2 total, 1 arrived, 1 still travelling, 1 printed,
-    // 1 still owed a ticket.
+    // Counts are per dish: 2 total, 1 still travelling, 1 still owed a ticket.
     expect(find.text('هەموو (2)'), findsOneWidget);
-    expect(find.text('گەیشت (1)'), findsOneWidget);
     expect(find.text('نەگەیشت (1)'), findsOneWidget);
-    expect(find.text('پرێنت (1)'), findsOneWidget);
     expect(find.text('دوبارە پرێنت (1)'), findsOneWidget);
+
+    // The «گەیشت» and «پرێنت» filters are gone: they are the card's colours,
+    // not buckets the captain picks.
+    expect(find.text('گەیشت (1)'), findsNothing);
+    expect(find.text('پرێنت (1)'), findsNothing);
 
     // Both dishes render, each with its resolved printer (kitchen by default).
     expect(find.text('کەباب ×1'), findsOneWidget);
@@ -152,7 +156,8 @@ void main() {
 
     // The whole dish is in the reprint bucket.
     expect(find.text('دوبارە پرێنت (1)'), findsOneWidget);
-    expect(find.text('پرێنت (0)'), findsOneWidget);
+    // ...and the «پرێنت» filter it used to sit next to is gone.
+    expect(find.text('پرێنت (0)'), findsNothing);
 
     expect(tester.takeException(), isNull);
     await disposePage(tester);

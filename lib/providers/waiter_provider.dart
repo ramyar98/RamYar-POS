@@ -83,6 +83,21 @@ final pendingSyncCountProvider = FutureProvider<int>((ref) async {
   return db.getPendingCount();
 });
 
+/// The sending state of the open tables as the TILL sees it.
+///
+/// Separate from [deliveryStatusProvider] on purpose: that one reads the
+/// captain's `order_delivery` rows, which the till does not have. This one
+/// derives the same answer from the tables and their dishes, so the cashier can
+/// check whether food they added arrived and printed before a captain was on
+/// duty.
+final tillDeliveryStatusProvider = FutureProvider<List<TillDeliveryModel>>((
+  ref,
+) async {
+  ref.watch(orderRevisionProvider);
+  final db = ref.read(localDbProvider);
+  return db.getTillOrderDeliveries();
+});
+
 /// The list of tables - the grid every captain and cashier sees on their home
 /// screen.
 ///

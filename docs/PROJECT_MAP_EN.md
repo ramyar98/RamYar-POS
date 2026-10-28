@@ -283,7 +283,7 @@ codes, plus add-table, connection, delivery-inbox and account controls.
   “وەیتەر”); **Settings (ڕێخستن)** opens **Waiter settings**; **Log out
   (دەرچوون)** with confirmation (Cancel / Log out).
 - **Table cards** (tappable) — statuses: **Empty (بەتاڵ)**, **Customer seated
-  (موشتەری دانیشتووە)**, **Bill requested (داوای پارەی کردووە)**, **Overdue
+  (موشتەری دانیشتووە)**, **Account requested (داوای حیسابی کردووە)**, **Overdue
   (دواکەوتوو)** (red after 10 minutes). Each card shows the table name, seated
   time and total in IQD.
   - **Tap an empty table** → guest-count dialog **“چەند کەسن؟”** *[How many

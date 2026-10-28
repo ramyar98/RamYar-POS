@@ -11,6 +11,18 @@
 #    2. preflight      -> checks whether signing secrets exist.
 #    3. signed-ipa     -> runs ONLY when the signing secrets below are set.
 #                         Produces a signed .ipa for TestFlight / App Store.
+#    4. release        -> attaches the unsigned .ipa to a GitHub Release, so
+#                         there is one permanent download link instead of an
+#                         artifact that expires after 14 days. Runs on a `v*`
+#                         tag, or by hand with a tag you type in.
+#
+#  WHY SELF-SIGNED CERTIFICATES ARE NOT AN OPTION
+#    iOS verifies a code signature against Apple's certificate chain, so a
+#    self-signed .ipa is rejected at install time on every non-jailbroken
+#    device - the check is in the OS and no CI flag avoids it. The two real
+#    routes are the unsigned .ipa (re-signed on the spot by Sideloadly with
+#    your own free Apple ID; 7-day expiry) and the signed job below once a
+#    distribution certificate + profile exist as secrets.
 #
 #  COST NOTE
 #    - Public repo  : macOS minutes are free.

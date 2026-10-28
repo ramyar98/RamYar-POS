@@ -164,7 +164,7 @@ class LocalDatabase {
 
   /// Current on-disk schema version. Bumped whenever [_createTables] or
   /// [_migrate] gain a table, a column or an index.
-  static const int schemaVersion = 46;
+  static const int schemaVersion = 47;
 
   Future<void> init({bool inMemory = false, String? path}) async {
     if (_db != null) return;
@@ -550,7 +550,13 @@ class LocalDatabase {
         note TEXT DEFAULT '',
         totalAmount REAL DEFAULT 0,
         itemsJson TEXT DEFAULT '',
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        carriedFromShiftId INTEGER DEFAULT 0,
+        carriedFromCashierId INTEGER DEFAULT 0,
+        carriedFromStartedAt TEXT DEFAULT '',
+        carriedAt TEXT DEFAULT '',
+        settledAt TEXT DEFAULT '',
+        settledShiftId INTEGER DEFAULT 0
       )
     ''');
 
@@ -1675,6 +1681,31 @@ class LocalDatabase {
       // code only knew "the table failed"), so it is left to speak for itself:
       // those dishes keep printedAt empty and therefore show up under
       // "دوبارە پرێنت", which is exactly where they belong.
+    }
+    if (oldVersion < 47) {
+      // v47: a shift no longer starts on an empty floor. Whatever tables were
+      // still seated when the previous shift closed now belong to the shift
+      // that just opened - that cashier is the one who will serve and settle
+      // them, so the work must appear in THEIR report.
+      //
+      // `shift_remaining_tables` already held the "left behind at close"
+      // snapshot. These columns turn the same row into a live carry-over
+      // record: where the table came from, when it was adopted, and when (and
+      // under which shift) it was finally settled.
+      for (final column in [
+        'carriedFromShiftId INTEGER DEFAULT 0',
+        'carriedFromCashierId INTEGER DEFAULT 0',
+        "carriedFromStartedAt TEXT DEFAULT ''",
+        "carriedAt TEXT DEFAULT ''",
+        "settledAt TEXT DEFAULT ''",
+        'settledShiftId INTEGER DEFAULT 0',
+      ]) {
+        try {
+          await db.execute(
+            'ALTER TABLE shift_remaining_tables ADD COLUMN $column',
+          );
+        } catch (_) {}
+      }
     }
 
     await _createSyncIndexes(db);
@@ -2984,6 +3015,10 @@ class LocalDatabase {
       whereArgs: [tableId],
     );
     await _clearTableNotifications(tableId);
+    // If this table was inherited from a previous shift, this is the moment its
+    // carry-over record closes - however it was cleared (paid, moved to debts,
+    // emptied by the captain). See _settleCarriedRecord.
+    await _settleCarriedRecord(tableId);
     // Every open screen is showing this table's items and total, and both just
     // changed - including screens on other devices, once this reaches them.
     _bumpOrders();
@@ -4854,6 +4889,10 @@ class LocalDatabase {
       limit: 1,
     );
     if (rows.isNotEmpty) _emitMutation('SHIFT_STARTED', {'shift': rows.first});
+    // The floor does not start empty just because a new shift did. Every table
+    // still seated is inherited by this shift, so the cashier who just opened
+    // it is the one credited with serving and settling them.
+    await adoptCarriedTables(id);
     return id;
   }
 
@@ -4885,15 +4924,20 @@ class LocalDatabase {
   /// The rows keep what the table had - its dishes, waiter, seated time and
   /// note - so the admin's shift report can show what was left behind. Nothing
   /// here settles, frees or reprices a table: the snapshot is informational
-  /// only and never counts into the shift's money. A shift that already has a
-  /// snapshot keeps it, so a double close can never duplicate the record.
+  /// only and never counts into the shift's money.
+  ///
+  /// A table this shift INHERITED (see [adoptCarriedTables]) already has a row
+  /// under this shift; closing refreshes that row's snapshot instead of adding
+  /// a duplicate, so the report holds one record per table per shift. The guard
+  /// ignores carried rows for the same reason: inheriting tables must not stop
+  /// the close-of-shift snapshot from being written at all.
   Future<void> captureRemainingTables(int shiftId) async {
     if (shiftId <= 0) return;
     try {
       final already = await db.query(
         'shift_remaining_tables',
         columns: ['id'],
-        where: 'shiftId = ?',
+        where: "shiftId = ? AND carriedAt = ''",
         whereArgs: [shiftId],
         limit: 1,
       );
@@ -4909,40 +4953,224 @@ class LocalDatabase {
       if (rows.isEmpty) return;
 
       final shiftKey = await _shiftKeyFor(shiftId);
-      final now = DateTime.now().toIso8601String();
-      final captured = <Map<String, dynamic>>[];
+      final changed = <Map<String, dynamic>>[];
       for (final row in rows) {
         final tableId = row['id'] as int? ?? 0;
         if (tableId <= 0) continue;
-        final waiterId = row['waiterId'] as String? ?? '';
-        final items = await getOrderItems(tableId);
-        final map = <String, dynamic>{
-          'shiftId': shiftId,
-          'shiftCashierId': shiftKey['cashierId'] as int? ?? 0,
-          'shiftStartedAt': shiftKey['startedAt'] as String? ?? '',
-          'tableId': tableId,
-          'tableName': row['name'] as String? ?? '',
-          'guestCount': row['guestCount'] as int? ?? 0,
-          'seatedAt': row['seatedTime'] as String? ?? '',
-          'waiterId': waiterId,
-          'waiterName': await _waiterNameFor(waiterId),
-          'note': row['note'] as String? ?? '',
-          'totalAmount': (row['totalAmount'] as num?)?.toDouble() ?? 0,
-          'itemsJson': encodeRemainingTableItems(items),
-          'createdAt': now,
-        };
-        final id = await db.insert('shift_remaining_tables', map);
-        map['id'] = id;
-        captured.add(map);
+        final snapshot = await _remainingTableSnapshot(row, shiftId, shiftKey);
+
+        // Inherited table: the row already exists under this shift, so refresh
+        // what it holds - the guest may have ordered more since the handover.
+        final existing = await db.query(
+          'shift_remaining_tables',
+          where: "shiftId = ? AND tableId = ? AND carriedAt != ''",
+          whereArgs: [shiftId, tableId],
+          limit: 1,
+        );
+        if (existing.isNotEmpty) {
+          final id = existing.first['id'] as int;
+          await db.update(
+            'shift_remaining_tables',
+            snapshot,
+            where: 'id = ?',
+            whereArgs: [id],
+          );
+          changed.add({...snapshot, 'id': id});
+          continue;
+        }
+
+        final id = await db.insert('shift_remaining_tables', snapshot);
+        changed.add({...snapshot, 'id': id});
       }
-      if (captured.isEmpty) return;
+      if (changed.isEmpty) return;
       _emitMutation('SHIFT_REMAINING_TABLES', {
-        'tables': captured,
+        'tables': changed,
         if (shiftKey.isNotEmpty) 'shiftKey': shiftKey,
       });
     } catch (_) {
       // The snapshot is a convenience for the report; it must never stop a
       // shift from closing, so a failure here is swallowed.
+    }
+  }
+
+  /// Adopts every table that is still seated into [shiftId].
+  ///
+  /// This is the carry-over the shop runs on: when a cashier closes a shift the
+  /// floor may still be full. Those tables are never freed or renumbered - they
+  /// belong to the NEXT shift, because the cashier who opens that shift is the
+  /// one who serves and settles them from then on. The settlement itself is
+  /// already stamped with whichever shift is open at the time (see
+  /// [settleTable]'s `shiftId`); this record is what lets the admin report show
+  /// that the table was inherited, from which shift, and how it ended.
+  ///
+  /// Called from [startShift]. Delivery slots are skipped: a delivery is not
+  /// carried by a cashier's shift.
+  Future<void> adoptCarriedTables(int shiftId) async {
+    if (shiftId <= 0) return;
+    try {
+      final shiftKey = await _shiftKeyFor(shiftId);
+      final rows = await db.query(
+        'tables',
+        where: "(isDelivery = 0 OR isDelivery IS NULL) AND status != ?",
+        whereArgs: [TableStatus.empty.index],
+      );
+      if (rows.isEmpty) return;
+
+      final now = DateTime.now().toIso8601String();
+      final adopted = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        final tableId = row['id'] as int? ?? 0;
+        if (tableId <= 0) continue;
+        // Never adopt twice: a retried start must not duplicate the record.
+        final already = await db.query(
+          'shift_remaining_tables',
+          columns: ['id'],
+          where: 'shiftId = ? AND tableId = ?',
+          whereArgs: [shiftId, tableId],
+          limit: 1,
+        );
+        if (already.isNotEmpty) continue;
+
+        // Where the table actually came from: the latest still-open record on
+        // any other shift. When there is none (a fresh floor, or a legacy
+        // database), fall back to the most recent shift that ended - that is
+        // where the cashier just came from.
+        final origin = await _originForCarriedTable(tableId, shiftId);
+        final snapshot = await _remainingTableSnapshot(row, shiftId, shiftKey);
+        snapshot['carriedFromShiftId'] = origin?['shiftId'] as int? ?? 0;
+        snapshot['carriedFromCashierId'] =
+            origin?['shiftCashierId'] as int? ?? 0;
+        snapshot['carriedFromStartedAt'] =
+            origin?['shiftStartedAt'] as String? ?? '';
+        snapshot['carriedAt'] = now;
+        snapshot['settledAt'] = '';
+        snapshot['settledShiftId'] = 0;
+        final id = await db.insert('shift_remaining_tables', snapshot);
+        adopted.add({...snapshot, 'id': id});
+      }
+      if (adopted.isEmpty) return;
+      _emitMutation('SHIFT_REMAINING_TABLES', {
+        'tables': adopted,
+        if (shiftKey.isNotEmpty) 'shiftKey': shiftKey,
+      });
+    } catch (_) {
+      // Opening a shift must never fail because the carry-over could not be
+      // recorded; the floor itself is untouched either way.
+    }
+  }
+
+  /// The most recent still-open remaining-table record for [tableId] on a shift
+  /// other than [shiftId], or the latest ended shift when none exists.
+  Future<Map<String, dynamic>?> _originForCarriedTable(
+    int tableId,
+    int shiftId,
+  ) async {
+    final outstanding = await db.query(
+      'shift_remaining_tables',
+      where: "tableId = ? AND shiftId != ? AND settledAt = ''",
+      whereArgs: [tableId, shiftId],
+      orderBy: 'id DESC',
+      limit: 1,
+    );
+    if (outstanding.isNotEmpty) return outstanding.first;
+    final ended = await db.query(
+      'cashier_shifts',
+      where: "endedAt != '' AND id != ?",
+      whereArgs: [shiftId],
+      orderBy: 'startedAt DESC',
+      limit: 1,
+    );
+    if (ended.isEmpty) return null;
+    return {
+      'shiftId': ended.first['id'] as int? ?? 0,
+      'shiftCashierId': ended.first['cashierId'] as int? ?? 0,
+      'shiftStartedAt': ended.first['startedAt'] as String? ?? '',
+    };
+  }
+
+  /// Builds the snapshot columns for one still-seated table under [shiftId].
+  Future<Map<String, dynamic>> _remainingTableSnapshot(
+    Map<String, dynamic> tableRow,
+    int shiftId,
+    Map<String, dynamic> shiftKey,
+  ) async {
+    final tableId = tableRow['id'] as int? ?? 0;
+    final waiterId = tableRow['waiterId'] as String? ?? '';
+    final items = await getOrderItems(tableId);
+    return <String, dynamic>{
+      'shiftId': shiftId,
+      'shiftCashierId': shiftKey['cashierId'] as int? ?? 0,
+      'shiftStartedAt': shiftKey['startedAt'] as String? ?? '',
+      'tableId': tableId,
+      'tableName': tableRow['name'] as String? ?? '',
+      'guestCount': tableRow['guestCount'] as int? ?? 0,
+      'seatedAt': tableRow['seatedTime'] as String? ?? '',
+      'waiterId': waiterId,
+      'waiterName': await _waiterNameFor(waiterId),
+      'note': tableRow['note'] as String? ?? '',
+      'totalAmount': (tableRow['totalAmount'] as num?)?.toDouble() ?? 0,
+      'itemsJson': encodeRemainingTableItems(items),
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+  }
+
+  /// Closes the carry-over record of [tableId] once the table is freed.
+  ///
+  /// Any way a table leaves the floor counts - paid in full, moved to debts,
+  /// cleared by the captain - because in every case the table is no longer part
+  /// of the shift's open work. The row's own `shiftId` is the shift that
+  /// inherited it, so that is the shift the settlement is filed under; the
+  /// update is skipped when that shift has already closed, leaving the closed
+  /// report exactly as it stood on the day.
+  Future<void> _settleCarriedRecord(int tableId) async {
+    if (tableId <= 0) return;
+    try {
+      final rows = await db.query(
+        'shift_remaining_tables',
+        where: "tableId = ? AND settledAt = '' AND carriedAt != ''",
+        whereArgs: [tableId],
+      );
+      if (rows.isEmpty) return;
+      final now = DateTime.now().toIso8601String();
+      final changed = <Map<String, dynamic>>[];
+      for (final row in rows) {
+        final shiftId = row['shiftId'] as int? ?? 0;
+        final open = await db.query(
+          'cashier_shifts',
+          columns: ['id'],
+          where: 'id = ? AND endedAt = ?',
+          whereArgs: [shiftId, ''],
+          limit: 1,
+        );
+        // A carried row whose shift already closed is history: the table was
+        // still open when that shift ended, and the next shift's own record
+        // takes over from here.
+        if (open.isEmpty) continue;
+        final id = row['id'] as int? ?? 0;
+        await db.update(
+          'shift_remaining_tables',
+          {'settledAt': now, 'settledShiftId': shiftId},
+          where: 'id = ?',
+          whereArgs: [id],
+        );
+        changed.add({...row, 'settledAt': now, 'settledShiftId': shiftId});
+      }
+      if (changed.isEmpty) return;
+      for (final map in changed) {
+        // Each record travels with its own shift's device-independent key, so
+        // the receiving device attaches it to the matching shift.
+        final key = {
+          'cashierId': map['shiftCashierId'] as int? ?? 0,
+          'startedAt': map['shiftStartedAt'] as String? ?? '',
+        };
+        _emitMutation('SHIFT_REMAINING_TABLES', {
+          'tables': [map],
+          if (key['cashierId'] != 0 && (key['startedAt'] as String).isNotEmpty)
+            'shiftKey': key,
+        });
+      }
+    } catch (_) {
+      // The audit record must never stop a table from being freed.
     }
   }
 
@@ -4955,7 +5183,8 @@ class LocalDatabase {
     return user?.name ?? '';
   }
 
-  /// The tables left un-settled when [shiftId] closed, newest snapshot first.
+  /// Every table that belongs to [shiftId]: the ones it inherited when it
+  /// opened, and the ones left sitting when it closed.
   Future<List<RemainingTable>> getRemainingTablesByShift(int shiftId) async {
     if (shiftId <= 0) return const [];
     final maps = await db.query(
@@ -4967,8 +5196,14 @@ class LocalDatabase {
     return maps.map((m) => RemainingTable.fromMap(m)).toList();
   }
 
-  /// Applies a remaining-tables snapshot sent by another device, re-linking it
-  /// to the matching shift on THIS device via the device-independent shift key.
+  /// Applies a remaining-tables row sent by another device, re-linking it to the
+  /// matching shift on THIS device via the device-independent shift key.
+  ///
+  /// Unlike the original snapshot-only version this also UPDATES an existing
+  /// row: a carried table is created when a shift opens and changes twice after
+  /// that (its snapshot is refreshed at close, and it is marked settled when it
+  /// is paid). Skipping existing rows would leave the admin's copy frozen at
+  /// the moment of handover.
   Future<void> applyRemoteRemainingTables(
     List<Map<String, dynamic>> tables, {
     Map<String, dynamic>? shiftKey,
@@ -4979,17 +5214,30 @@ class LocalDatabase {
       final raw = Map<String, dynamic>.from(map);
       final tableId = raw['tableId'] as int? ?? 0;
       if (tableId <= 0) continue;
+      raw['shiftId'] = localShiftId;
+      raw.remove('id');
       final existing = await db.query(
         'shift_remaining_tables',
-        columns: ['id'],
         where: 'shiftId = ? AND tableId = ?',
         whereArgs: [localShiftId, tableId],
         limit: 1,
       );
-      if (existing.isNotEmpty) continue;
-      raw['shiftId'] = localShiftId;
-      raw.remove('id');
-      await db.insert('shift_remaining_tables', raw);
+      if (existing.isEmpty) {
+        await db.insert('shift_remaining_tables', raw);
+        continue;
+      }
+      // A settlement is final: an older payload that still says "open" must not
+      // resurrect it when mutations arrive out of order.
+      final alreadySettled =
+          (existing.first['settledAt'] as String? ?? '').isNotEmpty;
+      final incomingSettled = (raw['settledAt'] as String? ?? '').isNotEmpty;
+      if (alreadySettled && !incomingSettled) continue;
+      await db.update(
+        'shift_remaining_tables',
+        raw,
+        where: 'id = ?',
+        whereArgs: [existing.first['id'] as int],
+      );
     }
   }
 
@@ -6483,6 +6731,92 @@ class LocalDatabase {
       itemsByTable[t] = (itemsByTable[t] ?? [])..add(it);
     }
     return filtered.map((d) => d.withItems(itemsByTable[d.tableId] ?? const [])).toList();
+  }
+
+  /// The sending state of every table that is currently open, as seen from
+  /// the TILL.
+  ///
+  /// This is the cashier's counterpart to [getOrderDeliveries]. The captain's
+  /// delivery rows are created only on the device that sent the order
+  /// (`recordOrderSent`), so on the till `order_delivery` is empty and the
+  /// captain's screen would truthfully say "nothing was sent" about a table
+  /// that is full of food. The till builds the same answer from what it really
+  /// has: the seated tables and their dishes, where `syncedAt` means the line
+  /// reached this device and `printedAt` / `failedPrinters` mean its tickets
+  /// did (or did not) come out.
+  ///
+  /// Empty tables and delivery slots are left out: there is nothing to check on
+  /// an empty table, and a delivery has no captain waiting on a ticket.
+  Future<List<TillDeliveryModel>> getTillOrderDeliveries() async {
+    final tableRows = await db.query(
+      'tables',
+      where:
+          "(isDelivery = 0 OR isDelivery IS NULL) AND status != ?",
+      whereArgs: [TableStatus.empty.index],
+      orderBy: 'id ASC',
+    );
+    if (tableRows.isEmpty) return const [];
+
+    final tableIds = tableRows.map((m) => m['id'] as int).toList();
+    final inClause = List.filled(tableIds.length, '?').join(',');
+    final itemMaps = await db.query(
+      'order_items',
+      where: 'tableId IN ($inClause)',
+      whereArgs: tableIds,
+      orderBy: 'createdAt ASC',
+    );
+
+    final itemsByTable = <int, List<DeliveryItemStatus>>{};
+    final lastItemAt = <int, String>{};
+    for (final m in itemMaps) {
+      final tableId = m['tableId'] as int;
+      final createdAt = m['createdAt'] as String? ?? '';
+      if (createdAt.isNotEmpty &&
+          (lastItemAt[tableId] == null ||
+              createdAt.compareTo(lastItemAt[tableId]!) > 0)) {
+        lastItemAt[tableId] = createdAt;
+      }
+      final item = DeliveryItemStatus(
+        id: m['id'] as String? ?? '',
+        name: m['name'] as String? ?? '',
+        quantity: m['quantity'] as int? ?? 1,
+        category: m['category'] as String? ?? '',
+        syncedAt: m['syncedAt'] as String? ?? '',
+        printedAt: m['printedAt'] as String? ?? '',
+        failedPrinters: m['failedPrinters'] as String? ?? '',
+      );
+      (itemsByTable[tableId] ??= []).add(item);
+    }
+
+    final waiterNames = <String, String>{};
+    final deliveries = <TillDeliveryModel>[];
+    for (final row in tableRows) {
+      final tableId = row['id'] as int;
+      final items = itemsByTable[tableId] ?? const <DeliveryItemStatus>[];
+      // A table with no dishes has nothing to deliver: the cashier seats it and
+      // hands over the menu, but there is no order to track until food is rung
+      // in. It stays out of this list so the page only shows real work.
+      if (items.isEmpty) continue;
+      final waiterId = row['waiterId'] as String? ?? '';
+      var waiterName = waiterNames[waiterId];
+      if (waiterName == null) {
+        waiterName = await _waiterNameFor(waiterId);
+        waiterNames[waiterId] = waiterName;
+      }
+      deliveries.add(
+        TillDeliveryModel(
+          tableId: tableId,
+          tableName: row['name'] as String? ?? '',
+          seatedAt: row['seatedTime'] as String? ?? '',
+          sentAt: lastItemAt[tableId] ?? '',
+          waiterName: waiterName,
+          items: items,
+        ),
+      );
+    }
+    // Newest activity first, matching the captain's delivery list.
+    deliveries.sort((a, b) => b.sentAt.compareTo(a.sentAt));
+    return deliveries;
   }
 
   Future<void> supersedePrintJobs(int tableId) async {

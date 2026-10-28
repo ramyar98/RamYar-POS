@@ -883,12 +883,12 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.english: 'No previous orders in this shift',
     AppLanguage.turkish: 'Bu vardiyada önceki sipariş yok',
   },
-  'داوای پارەی کردووە': {
-    AppLanguage.badini: 'داوای پارەی کردووە',
-    AppLanguage.arabic: 'طلب الدفع',
-    AppLanguage.persian: 'درخواست پرداخت',
-    AppLanguage.english: 'Payment requested',
-    AppLanguage.turkish: 'Ödeme istendi',
+  'داوای حیسابی کردووە': {
+    AppLanguage.badini: 'داوای حیسابی کردووە',
+    AppLanguage.arabic: 'طلب الحساب',
+    AppLanguage.persian: 'درخواست حساب',
+    AppLanguage.english: 'Account requested',
+    AppLanguage.turkish: 'Hesap istendi',
   },
 
   // ===== App =====
@@ -1552,6 +1552,27 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.persian: 'میزهای باقی‌مانده',
     AppLanguage.english: 'Remaining tables',
     AppLanguage.turkish: 'Kalan masalar',
+  },
+  'هاتووە لە شەفتی پێشوو': {
+    AppLanguage.badini: 'هاتیە ژ شەفتا بەری نوکە',
+    AppLanguage.arabic: 'واردة من الوردية السابقة',
+    AppLanguage.persian: 'منتقل‌شده از شیفت قبلی',
+    AppLanguage.english: 'Carried over from the previous shift',
+    AppLanguage.turkish: 'Önceki vardiyadan devredildi',
+  },
+  'حیسابکراوە': {
+    AppLanguage.badini: 'حیسابکریە',
+    AppLanguage.arabic: 'تمت التسوية',
+    AppLanguage.persian: 'تسویه شده',
+    AppLanguage.english: 'Settled',
+    AppLanguage.turkish: 'Hesabı kapatıldı',
+  },
+  'ماوە': {
+    AppLanguage.badini: 'مان',
+    AppLanguage.arabic: 'متبقية',
+    AppLanguage.persian: 'باقی‌مانده',
+    AppLanguage.english: 'Still open',
+    AppLanguage.turkish: 'Açık',
   },
   'هیچ مێزێکی ماوە نییە': {
     AppLanguage.badini: 'هیچ مێزێک نەما',
@@ -4254,6 +4275,13 @@ final Map<String, Map<AppLanguage, String>> _allTranslations = {
     AppLanguage.persian: 'وضعیت ارسال درخواست',
     AppLanguage.english: 'Request sending status',
     AppLanguage.turkish: 'İstek gönderme durumu',
+  },
+  'دۆخی ئۆردەر': {
+    AppLanguage.badini: 'دۆخی ئۆردەر',
+    AppLanguage.arabic: 'حالة الطلب',
+    AppLanguage.persian: 'وضعیت سفارش',
+    AppLanguage.english: 'Order status',
+    AppLanguage.turkish: 'Sipariş durumu',
   },
   'دیاریکردنی مێز': {
     AppLanguage.badini: 'دیاریکردنی مێز',

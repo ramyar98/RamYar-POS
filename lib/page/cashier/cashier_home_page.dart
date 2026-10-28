@@ -24,6 +24,7 @@ import '../../providers/printer_provider.dart';
 import '../../services/sync_provider.dart';
 import 'cashier_cancelled_items_page.dart';
 import 'cashier_expenses_page.dart';
+import 'cashier_order_delivery_page.dart';
 import 'cashier_previous_orders_page.dart';
 import '../../widgets/profile_icon.dart';
 import '../../widgets/table_card.dart';
@@ -227,6 +228,17 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
     if (mounted) await _loadShift();
   }
 
+  /// Opens the cashier's view of what has been sent to the till: which dishes
+  /// arrived, and which still owe a ticket. The captain has the same screen
+  /// from their own device; this one is built from the tables and their dishes,
+  /// because the till does not hold the captain's delivery rows.
+  Future<void> _openOrderDeliveryPage() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CashierOrderDeliveryPage()),
+    );
+    if (mounted) await _loadShift();
+  }
+
   Future<void> _toggleShift() async {
     final user = ref.read(authProvider);
     if (user == null) return;
@@ -308,7 +320,7 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
       case TableStatus.occupied:
         return context.tr('دانیشتوو');
       case TableStatus.billRequested:
-        return context.tr('داوای پارەی کردووە');
+        return context.tr('داوای حیسابی کردووە');
       case TableStatus.overdue:
         return context.tr('دواکەوتوو');
     }
@@ -1957,6 +1969,21 @@ class _CashierHomePageState extends ConsumerState<CashierHomePage>
                   _openExpensesPage,
                 ),
               ],
+              const SizedBox(width: 2),
+              // «دۆخی ناردنی داواکاری» follows the expenses ledger on purpose: both are
+              // things the cashier checks while a shift is running. It is
+              // outside the shift block because the cashier may need it even
+              // before a shift is opened - they can add food to a table before
+              // the captain has started working.
+              Tooltip(
+                message: context.tr('دۆخی ناردنی داواکاری'),
+                child: _appBarButton(
+                  context.tr('دۆخی ناردنی داواکاری'),
+                  Icons.local_shipping_rounded,
+                  AppColors.blue,
+                  _openOrderDeliveryPage,
+                ),
+              ),
               const SizedBox(width: 2),
               _appBarButton(
                 context.tr('ڕێفرێش'),

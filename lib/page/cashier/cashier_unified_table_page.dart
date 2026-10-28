@@ -379,7 +379,7 @@ class _CashierUnifiedTablePageState
       case TableStatus.occupied:
         return context.tr('دانیشتوو');
       case TableStatus.billRequested:
-        return context.tr('داواکراوی حیساب');
+        return context.tr('داوای حیسابی کردووە');
       case TableStatus.overdue:
         return context.tr('دواکەوتوو');
       default:
@@ -488,7 +488,7 @@ class _CashierUnifiedTablePageState
                 table.printedAt.isNotEmpty) ...[
               const SizedBox(height: 10),
               _tableInfoRow(
-                ctx.tr('کاتی داواکردنی حیساب'),
+                ctx.tr('کاتی داوای حیساب'),
                 table.formattedPrintedTimeAmPm(
                   am: ctx.tr('پ.ن'),
                   pm: ctx.tr('د.ن'),

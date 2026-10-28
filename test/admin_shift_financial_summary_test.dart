@@ -19,7 +19,8 @@ import 'package:ramyar_pos/page/admin/admin_shift_detail_page.dart';
 /// means physical cash: a bill on credit and an electronic receipt never reach
 /// the drawer, so neither lands there even though both are sales. «کاش (نەقد) +
 /// قەرز» adds the credit back: both the debts already collected and the ones
-/// still sitting in the till's «قەرزەکان» list.
+/// still sitting in the till's «قەرزەکان» list, and the «قەرز» card on its own
+/// is that credit half, so the admin can read the split without arithmetic.
 ///
 /// The «حسابی سیستەم» card is the size of the discrepancy between the two,
 /// coloured by its direction: «کەمترە» red, «زیاترە» amber, «یەکسانە» green.
@@ -94,12 +95,20 @@ void main() {
     }
   }
 
-  /// The four money cards the admin reads.
+  /// The money cards the admin reads. Scoped to the summary itself: «قەرز» is
+  /// also the payment label on a debt order in the list below, so an unscoped
+  /// text finder would count both.
+  final summary = find.byKey(const Key('shift-financial-summary'));
+
+  Finder card(String label) =>
+      find.descendant(of: summary, matching: find.text(label));
+
   Future<void> expectCards(WidgetTester tester) async {
-    expect(find.text('کاش (نەقد) + قەرز'), findsOneWidget);
-    expect(find.text('کاش (نەقد)'), findsOneWidget);
-    expect(find.text('کاشێر'), findsWidgets);
-    expect(find.text('حسابی سیستەم'), findsOneWidget);
+    expect(card('کاش (نەقد) + قەرز'), findsOneWidget);
+    expect(card('قەرز'), findsOneWidget);
+    expect(card('کاش (نەقد)'), findsOneWidget);
+    expect(card('کاشێر'), findsOneWidget);
+    expect(card('حسابی سیستەم'), findsOneWidget);
   }
 
   testWidgets('cash-only excludes debt and electronic receipts', (tester) async {
@@ -116,6 +125,95 @@ void main() {
     expect(find.textContaining(money(150000)), findsWidgets);
     expect(find.text('یەکسانە'), findsOneWidget,
         reason: 'the declared 150,000 matches the physical cash take exactly');
+  });
+
+  testWidgets('the «قەرز» card counts the credit alone', (tester) async {
+    await seedOrder('cash', 100000);
+    await seedOrder('cash', 50000);
+    await seedOrder('debt', 30000); // collected on credit, during this shift
+    await seedOrder('fib', 20000); // electronic, neither cash nor credit
+
+    await openReport(tester, collected: 150000);
+
+    await expectCards(tester);
+    // «قەرز» is the credit on its own: 30,000. The electronic receipt is in
+    // neither half of the split. Scoped to the summary because the same number
+    // is also the amount of the debt order listed below it.
+    expect(
+      find.descendant(
+        of: summary,
+        matching: find.text('د.ع ${money(30000)}'),
+      ),
+      findsOneWidget,
+    );
+    // «کاش (نەقد) + قەرز» is the two halves added: 150,000 cash + 30,000 credit.
+    expect(
+      find.descendant(
+        of: summary,
+        matching: find.text('د.ع ${money(180000)}'),
+      ),
+      findsOneWidget,
+    );
+    // The electronic receipt is in neither figure. Scoped to the summary: the
+    // order itself is still listed below with its 20,000 total.
+    expect(
+      find.descendant(
+        of: summary,
+        matching: find.text('د.ع ${money(20000)}'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a bill moved to «قەرزەکان» lands in the «قەرز» card',
+      (tester) async {
+    await seedOrder('cash', 10000);
+    // The cashier hit «قەرز» on a 40,000 bill: the table was moved to the till's
+    // debts list, so the money is owed rather than settled.
+    await db.db.insert('debts', {
+      'tableId': 2,
+      'tableName': 'مێز 2',
+      'amount': 40000.0,
+      'reason': 'قەرز',
+      'createdAt': DateTime.now().toIso8601String(),
+      'createdBy': 4,
+      'shiftId': shiftId,
+    });
+
+    await openReport(tester, collected: 10000);
+
+    await expectCards(tester);
+    // The debt is still owed, so it belongs to «قەرز» and not to «کاش (نەقد)».
+    expect(find.text('د.ع ${money(40000)}'), findsOneWidget);
+    expect(find.text('د.ع ${money(50000)}'), findsOneWidget);
+  });
+
+  testWidgets('«قەرز» sits between the whole book and the cash half',
+      (tester) async {
+    await seedOrder('cash', 10000);
+    await seedOrder('debt', 40000);
+
+    // Phone width: the cards wrap, so the test reads their declaration order in
+    // the widget tree - which is the order the admin reads them on screen,
+    // right-to-left per row in Kurdish.
+    await openReport(tester, collected: 10000, size: const Size(420, 2400));
+
+    await expectCards(tester);
+    final labels = tester
+        .widgetList<Text>(
+          find.descendant(of: summary, matching: find.byType(Text)),
+        )
+        .map((t) => t.data)
+        .whereType<String>()
+        .toList();
+    final totalIndex = labels.indexOf('کاش (نەقد) + قەرز');
+    final debtIndex = labels.indexOf('قەرز');
+    final cashIndex = labels.indexOf('کاش (نەقد)');
+    expect(totalIndex, isNonNegative);
+    expect(debtIndex, greaterThan(totalIndex),
+        reason: '«قەرز» must come after «کاش (نەقد) + قەرز»');
+    expect(cashIndex, greaterThan(debtIndex),
+        reason: '«قەرز» must come before «کاش (نەقد)»');
   });
 
   testWidgets('a short till reads «کەمترە»', (tester) async {

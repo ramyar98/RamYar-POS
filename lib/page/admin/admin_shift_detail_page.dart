@@ -22,8 +22,9 @@ import 'shift_rejected_items_page.dart';
 /// The two money figures the shift report opens with: the shift's settled
 /// orders and the total still owed on the debts it opened («قەرزەکان»).
 ///
-/// They are fetched together because the «کاش (نەقد) + قەرز» card needs both and
-/// the page would otherwise have to nest two `FutureBuilder`s.
+/// They are fetched together because the «کاش (نەقد) + قەرز» and the «قەرز»
+/// cards need both and the page would otherwise have to nest two
+/// `FutureBuilder`s.
 class _ShiftMoney {
   final List<SettledOrder> orders;
   final double debtTotal;
@@ -124,21 +125,6 @@ class _AdminShiftDetailPageState extends ConsumerState<AdminShiftDetailPage> {
           final orders = money?.orders ?? const <SettledOrder>[];
           final debtTotal = money?.debtTotal ?? 0;
 
-          // «کاش (نەقد) + قەرز» is the money the tables put on the books: the
-          // cash they paid plus everything they took on credit. A bill moved to
-          // «قەرزەکان» writes a debt row but no settled order, so the till's
-          // outstanding debts are added on top - otherwise that money would
-          // vanish from the report. Electronic brands never reach the drawer, so
-          // they are left out. Computed independently of «کاش (نەقد)» below,
-          // which is the physical cash alone.
-          final systemTotal = orders
-                  .where(
-                    (o) =>
-                        o.paymentMethod == 'cash' || o.paymentMethod == 'debt',
-                  )
-                  .fold<double>(0, (s, o) => s + o.totalAmount) +
-              debtTotal;
-
           final Map<String, double> methodTotals = {};
           for (final o in orders) {
             methodTotals.update(
@@ -152,6 +138,22 @@ class _AdminShiftDetailPageState extends ConsumerState<AdminShiftDetailPage> {
           // owed and the electronic brands never reach the drawer, so neither
           // belongs in what the cashier should be holding.
           final cashTotal = methodTotals['cash'] ?? 0;
+
+          // «قەرز» is the credit half of the shift on its own: the bills that
+          // were taken on credit and collected during this shift, plus the ones
+          // still sitting on the till's «قەرزەکان» list. A bill moved to
+          // «قەرزەکان» writes a debt row but no settled order, so the till's
+          // outstanding debts are added on top - otherwise that money would
+          // vanish from the report.
+          final debtOnly = (methodTotals['debt'] ?? 0) + debtTotal;
+
+          // «کاش (نەقد) + قەرز» is the money the tables put on the books: the
+          // cash they paid plus everything they took on credit. Electronic
+          // brands never reach the drawer, so they are left out. It is exactly
+          // the two cards below it added together, so the admin can read the
+          // split without doing arithmetic.
+          final systemTotal = cashTotal + debtOnly;
+
           // The cashier declares a counted figure only when the shift closes; an
           // open shift has nothing to reconcile yet.
           final declared = isActive ? 0.0 : shift.totalCollected;
@@ -191,6 +193,7 @@ class _AdminShiftDetailPageState extends ConsumerState<AdminShiftDetailPage> {
                 const SizedBox(height: 16),
                 _buildFinancialSummary(
                   systemTotal,
+                  debtOnly,
                   cashTotal,
                   shift.totalCollected,
                   comparisonColor,
@@ -343,6 +346,7 @@ class _AdminShiftDetailPageState extends ConsumerState<AdminShiftDetailPage> {
 
   Widget _buildFinancialSummary(
     double systemTotal,
+    double debtTotal,
     double cashTotal,
     double collected,
     Color compColor,
@@ -351,19 +355,28 @@ class _AdminShiftDetailPageState extends ConsumerState<AdminShiftDetailPage> {
     bool isActive,
   ) {
     final declared = isActive ? 0.0 : collected;
-    // The fourth card is the system's account of the drawer discrepancy: the
+    // The last card is the system's account of the drawer discrepancy: the
     // size of the gap between the cash the system says should be there
     // («کاش (نەقد)») and the cashier's declared count. The pill underneath
     // («زیاترە» amber / «کەمترە» red / «یەکسانە» green) names its direction, so
     // the amount itself is shown unsigned. Showing the expected cash here would
     // just repeat «کاش (نەقد)» and hide how far off the count is.
     final systemAccount = (declared - cashTotal).abs();
+    // The order the admin reads: the whole book first («کاش (نەقد) + قەرز»),
+    // then its parts - the credit on its own («قەرز») and the cash on its
+    // own («کاش (نەقد)») - and only then the drawer reconciliation.
     final cards = <Widget>[
       _summaryCard(
         context.tr('کاش (نەقد) + قەرز'),
         systemTotal,
         AppColors.primary,
         Icons.receipt_rounded,
+      ),
+      _summaryCard(
+        context.tr('قەرز'),
+        debtTotal,
+        AppColors.danger,
+        Icons.credit_score_rounded,
       ),
       _summaryCard(
         context.tr('کاش (نەقد)'),
@@ -388,6 +401,10 @@ class _AdminShiftDetailPageState extends ConsumerState<AdminShiftDetailPage> {
     ];
 
     return Container(
+      // Keyed so the widget tests can read the money cards without colliding
+      // with the same words appearing in the orders list below («قەرز» is both
+      // a card and a payment label).
+      key: const Key('shift-financial-summary'),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -434,21 +451,42 @@ class _AdminShiftDetailPageState extends ConsumerState<AdminShiftDetailPage> {
             ],
           ),
           const SizedBox(height: 16),
-          // Four money cards need room. On a tablet/laptop they sit in one row;
-          // on a phone four would each be too narrow to read, so they fall into
-          // two rows of two and keep a sane width.
+          // Money cards. They need room to stay readable, so the grid
+          // reflows with the width: up to six on a wide screen, three
+          // (then two) on a tablet and two (then one) on a phone. The cards of
+          // the last row stretch to fill that row instead of leaving a
+          // half-empty line, and every card of a row shares the row's height so
+          // the block reads as one tidy table.
           LayoutBuilder(
             builder: (context, constraints) {
               const gap = 10.0;
-              final perRow = constraints.maxWidth >= 640 ? 4 : 2;
-              final cardWidth =
-                  (constraints.maxWidth - gap * (perRow - 1)) / perRow;
-              return Wrap(
-                spacing: gap,
-                runSpacing: gap,
+              final perRow = constraints.maxWidth >= 1000
+                  ? 6
+                  : constraints.maxWidth >= 640
+                  ? 3
+                  : 2;
+              final rows = <List<Widget>>[];
+              for (var i = 0; i < cards.length; i += perRow) {
+                final end = i + perRow;
+                rows.add(cards.sublist(i, end > cards.length ? cards.length : end));
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final card in cards)
-                    SizedBox(width: cardWidth, child: card),
+                  for (var r = 0; r < rows.length; r++) ...[
+                    if (r > 0) const SizedBox(height: gap),
+                    IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var i = 0; i < rows[r].length; i++) ...[
+                            if (i > 0) const SizedBox(width: gap),
+                            Expanded(child: rows[r][i]),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               );
             },
@@ -1569,6 +1607,11 @@ class _ShiftDetailTabsState extends ConsumerState<_ShiftDetailTabs>
           return _empty(context.tr('هیچ مێزێکی ماوە نییە'));
         }
         final total = tables.fold<double>(0, (s, t) => s + t.totalAmount);
+        final carried = tables.where((t) => t.isCarriedIn).toList();
+        final carriedSettled = carried
+            .where((t) => t.settledAt.isNotEmpty)
+            .length;
+        final carriedOpen = carried.length - carriedSettled;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1608,6 +1651,19 @@ class _ShiftDetailTabsState extends ConsumerState<_ShiftDetailTabs>
                             color: AppColors.softText,
                           ),
                         ),
+                        if (carried.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '${context.tr('هاتووە لە شەفتی پێشوو')}: '
+                            '${carried.length}  •  '
+                            '${context.tr('حیسابکراوە')}: $carriedSettled  •  '
+                            '${context.tr('ماوە')}: $carriedOpen',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.softText,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1623,12 +1679,22 @@ class _ShiftDetailTabsState extends ConsumerState<_ShiftDetailTabs>
 
   Widget _remainingTableCard(RemainingTable t) {
     final items = decodeRemainingTableItems(t.itemsJson);
+    // A table this shift inherited from the previous one is shown in its own
+    // colour: green once it has been closed, the app's working orange while it
+    // is still open. "Left behind at close" keeps the neutral primary, because
+    // those tables were never the subject of a handover.
+    final settled = t.settledAt.isNotEmpty;
+    final Color accent = settled
+        ? AppColors.success
+        : t.isCarriedIn
+        ? AppColors.primary
+        : AppColors.blue;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        border: Border.all(color: accent.withValues(alpha: 0.3)),
       ),
       child: Material(
         color: Colors.transparent,
@@ -1643,12 +1709,14 @@ class _ShiftDetailTabsState extends ConsumerState<_ShiftDetailTabs>
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.12),
+                    color: accent.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.table_restaurant_rounded,
-                    color: AppColors.primary,
+                  child: Icon(
+                    settled
+                        ? Icons.check_circle_rounded
+                        : Icons.table_restaurant_rounded,
+                    color: accent,
                     size: 20,
                   ),
                 ),
@@ -1683,16 +1751,30 @@ class _ShiftDetailTabsState extends ConsumerState<_ShiftDetailTabs>
                           color: AppColors.softText,
                         ),
                       ),
+                      if (t.isCarriedIn) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '${context.tr('هاتووە لە شەفتی پێشوو')}  •  '
+                          '${context.tr(settled ? 'حیسابکراوە' : 'ماوە')}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: accent,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   '${context.tr('د.ع')} ${money(t.totalAmount)}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 15,
-                    color: AppColors.primary,
+                    color: accent,
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -1783,6 +1865,28 @@ class _ShiftDetailTabsState extends ConsumerState<_ShiftDetailTabs>
                         Icons.access_time_rounded,
                         widget.formatTime(t.createdAt),
                       ),
+                      if (t.isCarriedIn) ...[
+                        _remainingChip(
+                          Icons.swap_horiz_rounded,
+                          context.tr('هاتووە لە شەفتی پێشوو'),
+                        ),
+                        _remainingChip(
+                          t.settledAt.isNotEmpty
+                              ? Icons.check_circle_rounded
+                              : Icons.pending_actions_rounded,
+                          context.tr(t.settledAt.isNotEmpty ? 'حیسابکراوە' : 'ماوە'),
+                        ),
+                        if (t.carriedAt.isNotEmpty)
+                          _remainingChip(
+                            Icons.login_rounded,
+                            widget.formatTime(t.carriedAt),
+                          ),
+                        if (t.settledAt.isNotEmpty)
+                          _remainingChip(
+                            Icons.event_available_rounded,
+                            widget.formatTime(t.settledAt),
+                          ),
+                      ],
                     ],
                   ),
                 ],

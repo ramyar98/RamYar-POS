@@ -50,7 +50,7 @@ class ReceiptDesign {
   final int feedBeforeCut;
 
   const ReceiptDesign({
-    this.shopName = 'B I A B L O',
+    this.shopName = 'RamYar POS',
     this.showShopName = true,
     this.headerTitle = 'وەسڵی کاشێر',
     this.showHeaderTitle = true,
@@ -155,7 +155,7 @@ class ReceiptDesign {
     final width = (map['paperWidth'] as num?)?.toInt() ?? 40;
     final sep = map['separatorStyle'] as String? ?? 'dash';
     return ReceiptDesign(
-      shopName: map['shopName'] as String? ?? 'B I A B L O',
+      shopName: map['shopName'] as String? ?? 'RamYar POS',
       showShopName: map['showShopName'] as bool? ?? true,
       headerTitle: map['headerTitle'] as String? ?? 'وەسڵی کاشێر',
       showHeaderTitle: map['showHeaderTitle'] as bool? ?? true,
